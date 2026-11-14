@@ -1,0 +1,3 @@
+[submodule "toolchain/ysu-client"]
+	path = toolchain/ysu-client
+	url = https://github.com/Youwenqwq/ysu-client.git

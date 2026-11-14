@@ -1,0 +1,80 @@
+name: Release Plugin
+
+# Tags are <plugin-id>@<version> and must exactly match one plugin manifest.
+# The resulting Release is an internal build artifact, not public marketplace
+# distribution; public ZIPs remain served by the main website.
+on:
+  push:
+    tags:
+      - "*@*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish plugin ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release tag and toolchain
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            toolchain/ysu-client/pnpm-lock.yaml
+
+      - name: Install pinned toolchain dependencies
+        working-directory: toolchain/ysu-client
+        run: pnpm install --frozen-lockfile
+
+      - name: Install plugin workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate release tag against plugin manifests
+        id: release
+        run: node scripts/validate-release-tag.mjs "$GITHUB_REF_NAME"
+
+      - name: Build tagged plugin
+        env:
+          PLUGIN_ID: ${{ steps.release.outputs.plugin_id }}
+        run: node scripts/build-plugins.mjs "$PLUGIN_ID"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          PLUGIN_ID: ${{ steps.release.outputs.plugin_id }}
+          VERSION: ${{ steps.release.outputs.version }}
+          ZIP: ${{ steps.release.outputs.zip }}
+        run: |
+          set -euo pipefail
+          test -f "$ZIP" || { echo "::error::Missing release artifact: $ZIP"; exit 1; }
+          SHA256=$(sha256sum "$ZIP" | awk '{print $1}')
+          cat > release-notes.md <<EOF
+          Internal release for \`${PLUGIN_ID}\` ${VERSION}.
+
+          This repository is private. The ZIP is distributed to maintainers and
+          internal testers only; the public marketplace continues to be served
+          from https://ysu.welain.com/updates/plugins.json until public object/CDN
+          distribution is introduced.
+
+          SHA-256: \`${SHA256}\`
+          EOF
+          gh release create "$TAG" "$ZIP" \
+            --verify-tag \
+            --title "$TAG" \
+            --notes-file release-notes.md
