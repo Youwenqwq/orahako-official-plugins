@@ -11,7 +11,7 @@ import { SkbirdMessagesBadge } from "./navigation"
 export const manifest: PluginManifest = {
   id: "orahako.skbird",
   name: "森空鸟",
-  version: "1.1.0",
+  version: "1.1.1",
   apiVersion: 1,
   kind: "feature",
   categories: ["toybox"],

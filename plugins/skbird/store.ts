@@ -3,7 +3,10 @@ import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 import { SkbirdClient, generateDeviceId } from "./client"
 import { secureStorage } from "@orahako/plugin-ui/stores"
-import { STORAGE_KEYS } from "@orahako/plugin-ui/stores"
+
+/** Package-owned key; keep the existing value so saved credentials remain readable. */
+const SKBIRD_STORAGE_KEY = "orahako-skbird"
+
 /**
  * 森空鸟配置。token 来源于 App 抓包（微信登录无法脚本化），过期后需手动更新。
  * deviceId 首次启动随机生成并持久化（与 App 格式一致）。与教务 auth store 完全独立。
@@ -39,7 +42,7 @@ export const useSkbirdStore = create<SkbirdState>()(
       setUnreadCount: (unreadCount) => set({ unreadCount }),
     }),
     {
-      name: STORAGE_KEYS.skbird,
+      name: SKBIRD_STORAGE_KEY,
       storage: createJSONStorage(() => secureStorage),
       partialize: (s) => ({
         token: s.token,
