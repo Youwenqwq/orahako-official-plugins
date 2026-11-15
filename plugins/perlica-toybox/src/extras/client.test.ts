@@ -306,57 +306,28 @@ describe("PerlicaClient request contract", () => {
     })
   })
 
-  it("keeps return-check, dispatch-check, and return calls in order", async () => {
-    const now = vi.spyOn(Date, "now").mockReturnValue(1780000000123)
-    try {
-      const client = new PerlicaClient(CONFIG)
-      sendMock
-        .mockResolvedValueOnce(okResponse({ allowed: true }))
-        .mockResolvedValueOnce(
-          okResponse({
-            studyToReduceDispatch: false,
-            type: 1,
-            types: [{ money: "1000", type: "1" }],
-          })
-        )
-        .mockResolvedValueOnce(okResponse({}))
+  it("keeps return-check and return calls in order", async () => {
+    const client = new PerlicaClient(CONFIG)
+    sendMock
+      .mockResolvedValueOnce(okResponse({ allowed: true }))
+      .mockResolvedValueOnce(okResponse({}))
 
-      await client.returnCheck("M-100")
-      const dispatch = await client.dispatchCheck("ORDER-9", COORDS)
-      expect(dispatch).toMatchObject({
-        allowed: true,
-        dispatchType: 1,
-        options: [{ type: 1, money: 10 }],
-      })
-      await client.returnBike("ORDER-9", COORDS)
+    await client.returnCheck("M-100")
+    await client.returnBike("ORDER-9", COORDS)
 
-      expect(sendMock.mock.calls.map(([req]) => new URL(req.url).pathname)).toEqual([
-        "/dispatch/returnCheck.do",
-        "/dispatch/check.do",
-        "/machine/returnBike.do",
-      ])
-      expect(capturedUrl(0).searchParams.get("userCode")).toBe("M-100")
-      expect(Object.fromEntries(capturedUrl(1).searchParams)).toEqual({
-        token: TOKEN,
-        mapType: "2",
-        combineDispatch: "1",
-        orderNo: "ORDER-9",
-        lo: "120.456",
-        la: "30.123",
-        phoneTimeStamp: "1780000000123",
-        accuracy: "100",
-      })
-      expect(Object.fromEntries(capturedUrl(2).searchParams)).toEqual({
-        token: TOKEN,
-        dispatchType: "1",
-        orderSource: "3",
-        orderNo: "ORDER-9",
-        la: "30.123",
-        lo: "120.456",
-      })
-    } finally {
-      now.mockRestore()
-    }
+    expect(sendMock.mock.calls.map(([req]) => new URL(req.url).pathname)).toEqual([
+      "/dispatch/returnCheck.do",
+      "/machine/returnBike.do",
+    ])
+    expect(capturedUrl(0).searchParams.get("userCode")).toBe("M-100")
+    expect(Object.fromEntries(capturedUrl(1).searchParams)).toEqual({
+      token: TOKEN,
+      dispatchType: "1",
+      orderSource: "3",
+      orderNo: "ORDER-9",
+      la: "30.123",
+      lo: "120.456",
+    })
   })
 
   it("uses full parking parameters and retries continue with the reduced query", async () => {

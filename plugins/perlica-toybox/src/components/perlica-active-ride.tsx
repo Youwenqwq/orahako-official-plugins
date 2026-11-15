@@ -16,19 +16,19 @@ import {
   ResponsiveModalTitle,
 } from "@orahako/plugin-ui/components"
 import type { PerlicaClient } from "../extras/client"
+import {
+  estimateReturnFare,
+  fareRulesFromMachineFee,
+  selectRideCard,
+  type ReturnFareEstimate,
+} from "../extras/fare"
 import { PARK_POINT_SEARCH_RADIUS_METERS, selectParkingPoints } from "../extras/parking"
-import type {
-  PerlicaCoords,
-  PerlicaDispatchCheck,
-  PerlicaOrder,
-  PerlicaParkPoint,
-} from "../extras/types"
+import type { PerlicaCoords, PerlicaOrder, PerlicaParkPoint } from "../extras/types"
 import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
 import { PERLICA_PLUGIN_ID } from "../constants"
 
 const VISIBLE_POLL_MS = 8_000
 const RETURN_RECHECK_DELAY_MS = 450
-const DISPATCH_TYPE = 1
 
 type ActionKind = "park" | "continue" | "return-check" | "return"
 type ActionStep = "location" | "check" | "submit" | "verify" | "refresh"
@@ -45,7 +45,7 @@ type ReturnCandidate = {
   orderNo: string
   userCode: string
   coords: PerlicaCoords
-  fee: number | null
+  fare: ReturnFareEstimate
   parkPoints: PerlicaParkPoint[]
   parkPoint: PerlicaParkPoint | null
 }
@@ -79,6 +79,15 @@ function startTimestamp(value: string): number | null {
 
   const parsed = Date.parse(normalized.replace(" ", "T"))
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function orderMoneyCents(order: PerlicaOrder): number {
+  const value = Number(order.raw.money)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+function formatYuan(cents: number): string {
+  return `¥${(Math.max(0, cents) / 100).toFixed(2)}`
 }
 
 function elapsedText(elapsedMs: number): string {
@@ -138,19 +147,6 @@ function parkedStatus(order: PerlicaOrder): boolean | null {
   }
   if (status.includes("临停") || status.includes("暂停")) return true
   return false
-}
-
-function fallbackDispatchFee(dispatch: PerlicaDispatchCheck): number | null {
-  const optionFee = dispatch.options.find((option) => option.type === DISPATCH_TYPE)?.money
-  if (optionFee !== undefined) return optionFee
-
-  for (const key of ["dispatchFee", "fee", "dispatchPrice", "amount", "price", "money"]) {
-    const raw = dispatch.raw[key]
-    if (raw === null || raw === undefined || raw === "") continue
-    const value = Number(raw)
-    if (Number.isFinite(value)) return value / 100
-  }
-  return null
 }
 
 function delay(ms: number): Promise<void> {
@@ -397,10 +393,14 @@ export function PerlicaActiveRide({
       if (!freshCoords || !actionIsCurrent(operation)) return
 
       setActionStep(operation, "check")
-      const [checkResult, pointsResult] = await Promise.allSettled([
-        client.returnCheck(snapshot.userCode),
-        client.parkPoints(freshCoords, PARK_POINT_SEARCH_RADIUS_METERS),
-      ])
+      const [checkResult, pointsResult, orderResult, cardsResult, feeResult] =
+        await Promise.allSettled([
+          client.returnCheck(snapshot.userCode),
+          client.parkPoints(freshCoords, PARK_POINT_SEARCH_RADIUS_METERS),
+          client.currentOrder(),
+          client.rideCards(freshCoords),
+          client.machineFee(snapshot.userCode),
+        ])
       if (!actionIsCurrent(operation)) return
       if (checkResult.status === "rejected") throw checkResult.reason
       if (pointsResult.status === "rejected") reportErrorRef.current(pointsResult.reason)
@@ -416,19 +416,29 @@ export function PerlicaActiveRide({
       const selectedCoords = parking.snapped
         ? { lat: parking.snapped.lat, lng: parking.snapped.lng }
         : freshCoords
-      const dispatch = await client.dispatchCheck(snapshot.orderNo, selectedCoords)
-      if (!actionIsCurrent(operation)) return
-      if (!dispatch.allowed) {
-        toast.error(t("perlica.activeRideReturnCheckFailed"))
-        return
-      }
+
+      const freshOrder = orderResult.status === "fulfilled" ? orderResult.value : null
+      const effectiveOrder =
+        freshOrder?.orderNo === snapshot.orderNo ? freshOrder : snapshot
+      const startedAt = startTimestamp(effectiveOrder.startTime)
+      const durationMinutes =
+        startedAt === null ? 0 : Math.max(0, (Date.now() - startedAt) / 60_000)
+      const rideCard =
+        cardsResult.status === "fulfilled" ? selectRideCard(cardsResult.value) : null
+      const fareRules =
+        feeResult.status === "fulfilled" ? fareRulesFromMachineFee(feeResult.value) : null
 
       setReturnCandidate({
         orderKey: operation.orderKey,
         orderNo: snapshot.orderNo,
         userCode: snapshot.userCode,
         coords: selectedCoords,
-        fee: fallbackDispatchFee(dispatch),
+        fare: estimateReturnFare(
+          orderMoneyCents(effectiveOrder),
+          durationMinutes,
+          rideCard,
+          fareRules
+        ),
         parkPoints: parking.points,
         parkPoint: parking.snapped,
       })
@@ -439,39 +449,16 @@ export function PerlicaActiveRide({
     }
   }, [actionIsCurrent, beginAction, client, finishAction, setActionStep, t])
 
-  const handleSelectParkPoint = useCallback(
-    async (point: PerlicaParkPoint) => {
-      const candidate = returnCandidate
-      if (!candidate || candidate.parkPoint === point) return
-      const operation = beginAction("return-check")
-      if (!operation || candidate.orderKey !== operation.orderKey) {
-        if (operation) finishAction(operation)
-        return
+  const handleSelectParkPoint = useCallback((point: PerlicaParkPoint) => {
+    setReturnCandidate((candidate) => {
+      if (!candidate || candidate.parkPoint === point) return candidate
+      return {
+        ...candidate,
+        coords: { lat: point.lat, lng: point.lng },
+        parkPoint: point,
       }
-
-      const coords = { lat: point.lat, lng: point.lng }
-      setActionStep(operation, "check")
-      try {
-        const dispatch = await client.dispatchCheck(candidate.orderNo, coords)
-        if (!actionIsCurrent(operation)) return
-        if (!dispatch.allowed) {
-          toast.error(t("perlica.activeRideReturnCheckFailed"))
-          return
-        }
-        setReturnCandidate({
-          ...candidate,
-          coords,
-          parkPoint: point,
-          fee: fallbackDispatchFee(dispatch),
-        })
-      } catch (error) {
-        if (actionIsCurrent(operation)) reportErrorRef.current(error)
-      } finally {
-        finishAction(operation)
-      }
-    },
-    [actionIsCurrent, beginAction, client, finishAction, returnCandidate, setActionStep, t]
-  )
+    })
+  }, [])
 
   const handleReturn = useCallback(async () => {
     const candidate = returnCandidate
@@ -518,11 +505,6 @@ export function PerlicaActiveRide({
       finishAction(operation)
     }
   }, [actionIsCurrent, beginAction, client, finishAction, returnCandidate, setActionStep, t])
-
-  const fee =
-    returnCandidate?.fee === null || returnCandidate?.fee === undefined
-      ? t("perlica.activeRideFeeUnavailable")
-      : `¥${returnCandidate.fee.toFixed(2)}`
 
   return (
     <>
@@ -675,16 +657,50 @@ export function PerlicaActiveRide({
                   </section>
                 ) : null}
 
-                <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/50 p-3 text-sm">
-                  <span className="text-muted-foreground">
-                    {t("perlica.activeRideDispatchType")}
-                  </span>
-                  <span className="text-right font-mono font-medium">{DISPATCH_TYPE}</span>
-                  <span className="text-muted-foreground">
-                    {t("perlica.activeRideDispatchFee")}
-                  </span>
-                  <span className="text-right font-medium">{fee}</span>
-                </div>
+                <dl className="space-y-2 rounded-xl bg-muted/50 p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-muted-foreground">
+                      {t("perlica.activeRideCurrentFee")}
+                    </dt>
+                    <dd className="text-right font-medium">
+                      {formatYuan(returnCandidate.fare.grossCents)}
+                    </dd>
+                  </div>
+                  {returnCandidate.fare.freeMinutes > 0 ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">
+                        {returnCandidate.fare.cardName || t("perlica.activeRideRideCard")}
+                      </dt>
+                      <dd className="text-right">
+                        {t("perlica.activeRideCardFreeMinutes", {
+                          minutes: returnCandidate.fare.freeMinutes,
+                        })}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {returnCandidate.fare.freeMinutes > 0 && returnCandidate.fare.estimated ? (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-muted-foreground">
+                          {t("perlica.activeRideCardDeduction")}
+                        </dt>
+                        <dd className="text-right">
+                          -{formatYuan(returnCandidate.fare.deductionCents)}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 border-t pt-2">
+                        <dt className="font-medium">{t("perlica.activeRideEstimatedPayable")}</dt>
+                        <dd className="text-right font-semibold">
+                          {formatYuan(returnCandidate.fare.payableCents)}
+                        </dd>
+                      </div>
+                    </>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground">
+                    {t("perlica.activeRideEstimateNote")}
+                  </p>
+                </dl>
+
                 {currentActionMessage ? (
                   <p role="status" className="text-sm text-muted-foreground">
                     {currentActionMessage}

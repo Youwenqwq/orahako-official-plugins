@@ -77,19 +77,8 @@ export interface PerlicaMachineFee {
 
 export interface PerlicaReturnCheck {
   allowed: boolean
-  dispatchType: number
   message: string
   raw: PerlicaRaw
-}
-
-export interface PerlicaDispatchOption {
-  type: number
-  /** Dispatch fee in yuan; the service returns money fields in cents. */
-  money: number
-}
-
-export interface PerlicaDispatchCheck extends PerlicaReturnCheck {
-  options: PerlicaDispatchOption[]
 }
 
 export interface PerlicaPrepareResult {
@@ -465,7 +454,6 @@ function toCheck(data: unknown, wrappers: string[]): PerlicaReturnCheck {
   const hasExplicit = explicit.some((value) => value !== null && value !== undefined)
   return {
     allowed: hasExplicit ? rawBoolean(...explicit) : true,
-    dispatchType: rawNumber(raw.dispatchType, raw.dispatch_type),
     message: rawString(raw.message, raw.msg, raw.description),
     raw,
   }
@@ -473,22 +461,6 @@ function toCheck(data: unknown, wrappers: string[]): PerlicaReturnCheck {
 
 export function toPerlicaReturnCheck(data: unknown): PerlicaReturnCheck {
   return toCheck(data, ["returnCheck", "result"])
-}
-
-export function toPerlicaDispatchCheck(data: unknown): PerlicaDispatchCheck {
-  const check = toCheck(data, ["dispatchCheck", "result"])
-  const rawOptions = check.raw.types
-  const options = Array.isArray(rawOptions)
-    ? rawOptions.map((value) => {
-        const raw = asRecord(value) ?? {}
-        return { type: rawNumber(raw.type), money: rawNumber(raw.money) / 100 }
-      })
-    : []
-  return {
-    ...check,
-    dispatchType: rawNumber(check.raw.dispatchType, check.raw.dispatch_type, check.raw.type),
-    options,
-  }
 }
 
 export function toPerlicaRideCard(data: unknown): PerlicaRideCard {

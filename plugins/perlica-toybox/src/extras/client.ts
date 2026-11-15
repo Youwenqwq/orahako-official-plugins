@@ -1,7 +1,6 @@
 import { fetchStateless, type HttpResponse } from "@orahako/plugin-sdk/host"
 import {
   toPerlicaCurrentOrder,
-  toPerlicaDispatchCheck,
   toPerlicaGeoArea,
   toPerlicaMachineFee,
   toPerlicaMachineList,
@@ -18,7 +17,6 @@ import {
   toPerlicaUnreadCount,
   toPerlicaUserInfo,
   type PerlicaCoords,
-  type PerlicaDispatchCheck,
   type PerlicaGeoArea,
   type PerlicaMachine,
   type PerlicaMachineFee,
@@ -261,20 +259,6 @@ export class PerlicaClient {
   async returnCheck(machineNo: string): Promise<PerlicaReturnCheck> {
     return toPerlicaReturnCheck(
       await this.call("/dispatch/returnCheck.do", { userCode: machineNo })
-    )
-  }
-
-  async dispatchCheck(orderNo: string, coords: PerlicaCoords): Promise<PerlicaDispatchCheck> {
-    return toPerlicaDispatchCheck(
-      await this.call("/dispatch/check.do", {
-        mapType: 2,
-        combineDispatch: 1,
-        orderNo,
-        lo: coords.lng,
-        la: coords.lat,
-        phoneTimeStamp: Date.now(),
-        accuracy: 100,
-      })
     )
   }
 
