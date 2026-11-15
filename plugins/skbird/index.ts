@@ -1,4 +1,4 @@
-import { Bell, Bird, Settings, User } from "lucide-react"
+import { Bell, Bird, User } from "lucide-react"
 import { definePlugin, type PluginManifest } from "@orahako/plugin-sdk"
 import { skbirdTranslations } from "./i18n"
 import { SkbirdIndexPage } from "./pages/index"
@@ -11,7 +11,7 @@ import { SkbirdMessagesBadge } from "./navigation"
 export const manifest: PluginManifest = {
   id: "orahako.skbird",
   name: "森空鸟",
-  version: "1.1.1",
+  version: "1.2.0",
   apiVersion: 1,
   kind: "feature",
   categories: ["toybox"],
@@ -57,15 +57,6 @@ export const definition = definePlugin((ctx) => {
     icon: User,
     scope: "plugin",
     order: 20,
-  })
-  ctx.ui.registerNavigation({
-    id: "settings",
-    title: "设置",
-    titleKey: "skbird.settingsTitle",
-    page: "settings",
-    icon: Settings,
-    scope: "plugin",
-    order: 30,
   })
 
   ctx.ui.registerPage({

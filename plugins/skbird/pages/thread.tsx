@@ -5,7 +5,6 @@ import { BadgeCheck, Bookmark, MessageSquare, ThumbsUp } from "lucide-react"
 import type { PluginPageProps } from "@orahako/plugin-sdk"
 import { Badge } from "@orahako/plugin-ui/components"
 import { Button } from "@orahako/plugin-ui/components"
-import { Card, CardContent } from "@orahako/plugin-ui/components"
 import { Separator } from "@orahako/plugin-ui/components"
 import { Skeleton } from "@orahako/plugin-ui/components"
 import { Empty, EmptyHeader, EmptyTitle } from "@orahako/plugin-ui/components"
@@ -157,88 +156,84 @@ export function SkbirdThreadPage({ params, navigate }: PluginPageProps) {
 
   return (
     <div className="flex flex-col gap-4 p-4 max-sm:px-2">
-      <Card className="max-sm:rounded-none max-sm:bg-transparent max-sm:py-0 max-sm:ring-0">
-        <CardContent className="flex flex-col gap-3 p-4 max-sm:p-0">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {thread.avatarUrl ? (
-              <SkbirdImage
-                url={skbirdImageUrl(thread.avatarUrl, { w: 64, h: 64 })}
-                alt={thread.nickname}
-                className="size-6 shrink-0 rounded-full object-cover"
-              />
-            ) : null}
-            <span className="truncate">{thread.nickname}</span>
-            {thread.userLevelTitle ? (
-              <Badge variant="outline">{thread.userLevelTitle}</Badge>
-            ) : null}
-            <span className="ml-auto shrink-0 text-xs">{thread.postTimeText}</span>
-          </div>
-
-          {hidden ? (
-            <div className="flex flex-col items-start gap-3">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <BadgeCheck className="size-4 shrink-0" />
-                {t("skbird.certHidden")}
-              </div>
-              <Button onClick={handleUnlock} disabled={unlocking}>
-                {unlocking ? t("skbird.unlocking") : t("skbird.unlock")}
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg leading-snug font-semibold">{display.title}</h1>
-                {cert ? <Badge variant="secondary">{t("skbird.certBadge")}</Badge> : null}
-              </div>
-              {unlocked ? (
-                <p className="text-xs text-muted-foreground">{t("skbird.unlockedFromMark")}</p>
-              ) : null}
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">{display.content}</p>
-            </>
-          )}
-
-          {display.imgPaths.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {display.imgPaths.map((p) => (
-                <SkbirdImage
-                  key={p}
-                  url={skbirdImageUrl(p, { w: 200, h: 200 })}
-                  zoomUrl={skbirdImageUrl(p, "original")}
-                  alt=""
-                  className="size-25 rounded-md object-cover"
-                  zoomable
-                />
-              ))}
-            </div>
+      <div className="flex flex-col gap-3 sm:rounded-xl sm:bg-card sm:p-4 sm:text-sm sm:text-card-foreground sm:ring-1 sm:ring-foreground/10">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {thread.avatarUrl ? (
+            <SkbirdImage
+              url={skbirdImageUrl(thread.avatarUrl, { w: 64, h: 64 })}
+              alt={thread.nickname}
+              className="size-6 shrink-0 rounded-full object-cover"
+            />
           ) : null}
+          <span className="truncate">{thread.nickname}</span>
+          {thread.userLevelTitle ? <Badge variant="outline">{thread.userLevelTitle}</Badge> : null}
+          <span className="ml-auto shrink-0 text-xs">{thread.postTimeText}</span>
+        </div>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            {thread.cateName ? <span>{thread.cateName}</span> : null}
-            <button
-              type="button"
-              onClick={handleLike}
-              disabled={likePending}
-              className={`inline-flex items-center gap-1 ${thread.likeHas ? "text-primary" : ""}`}
-            >
-              <ThumbsUp className="size-4" />
-              {thread.likeCount}
-            </button>
-            <button
-              type="button"
-              onClick={handleMark}
-              disabled={markPending}
-              className={`inline-flex items-center gap-1 ${thread.markHas ? "text-primary" : ""}`}
-            >
-              <Bookmark className="size-4" />
-              {thread.markHas ? t("skbird.marked") : t("skbird.mark")}
-            </button>
-            <span className="inline-flex items-center gap-1">
-              <MessageSquare className="size-4" />
-              {thread.commentCount}
-            </span>
+        {hidden ? (
+          <div className="flex flex-col items-start gap-3">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <BadgeCheck className="size-4 shrink-0" />
+              {t("skbird.certHidden")}
+            </div>
+            <Button onClick={handleUnlock} disabled={unlocking}>
+              {unlocking ? t("skbird.unlocking") : t("skbird.unlock")}
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg leading-snug font-semibold">{display.title}</h1>
+              {cert ? <Badge variant="secondary">{t("skbird.certBadge")}</Badge> : null}
+            </div>
+            {unlocked ? (
+              <p className="text-xs text-muted-foreground">{t("skbird.unlockedFromMark")}</p>
+            ) : null}
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{display.content}</p>
+          </>
+        )}
+
+        {display.imgPaths.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {display.imgPaths.map((p) => (
+              <SkbirdImage
+                key={p}
+                url={skbirdImageUrl(p, { w: 200, h: 200 })}
+                zoomUrl={skbirdImageUrl(p, "original")}
+                alt=""
+                className="size-25 rounded-md object-cover"
+                zoomable
+              />
+            ))}
+          </div>
+        ) : null}
+
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          {thread.cateName ? <span>{thread.cateName}</span> : null}
+          <button
+            type="button"
+            onClick={handleLike}
+            disabled={likePending}
+            className={`inline-flex items-center gap-1 ${thread.likeHas ? "text-primary" : ""}`}
+          >
+            <ThumbsUp className="size-4" />
+            {thread.likeCount}
+          </button>
+          <button
+            type="button"
+            onClick={handleMark}
+            disabled={markPending}
+            className={`inline-flex items-center gap-1 ${thread.markHas ? "text-primary" : ""}`}
+          >
+            <Bookmark className="size-4" />
+            {thread.markHas ? t("skbird.marked") : t("skbird.mark")}
+          </button>
+          <span className="inline-flex items-center gap-1">
+            <MessageSquare className="size-4" />
+            {thread.commentCount}
+          </span>
+        </div>
+      </div>
 
       <Separator />
       <div className="flex flex-col gap-3">

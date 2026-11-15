@@ -26,6 +26,7 @@ import {
 } from "@orahako/plugin-ui/components"
 import { useTranslation } from "@orahako/plugin-ui/hooks"
 import { useBackHandler } from "@orahako/plugin-ui/hooks"
+import { useMobileHeaderRight } from "@orahako/plugin-ui/stores"
 import { SkbirdError, SKBIRD_ERRNO_TOKEN_INVALID } from "../client"
 import { getSkbirdClient, useSkbirdStore, useSkbirdUnreadCount } from "../store"
 import type { SkbirdCategory, SkbirdThread } from "../types"
@@ -307,6 +308,15 @@ export function SkbirdIndexPage({ pluginId, navigate }: PluginPageProps) {
     canLoadMore && !loading && !error
   )
 
+  useMobileHeaderRight(
+    <Button asChild size="icon-sm" variant="ghost" aria-label={t("skbird.settingsTitle")}>
+      <Link href={pluginPageHref(pluginId, "settings")}>
+        <Settings className="size-4" />
+      </Link>
+    </Button>,
+    [pluginId, t]
+  )
+
   if (hasHydrated && !token) {
     return (
       <div className="p-4">
@@ -425,7 +435,7 @@ export function SkbirdIndexPage({ pluginId, navigate }: PluginPageProps) {
           </Button>
         </form>
 
-        {/* 功能入口：桌面端显示；移动端由插件作用域底部导航提供 */}
+        {/* 桌面功能入口；移动端消息与我的位于底栏，设置位于顶栏 */}
         <div className="flex items-center max-sm:hidden">
           <Button
             asChild
@@ -500,12 +510,14 @@ export function SkbirdIndexPage({ pluginId, navigate }: PluginPageProps) {
         </Empty>
       ) : (
         <>
-          <div className="flex flex-col gap-3 max-sm:gap-0 max-sm:divide-y max-sm:divide-border">
+          <div className="flex flex-col gap-3 max-sm:gap-0">
             {threads.map((thread, i) => (
               <SkbirdThreadCard
                 key={thread.threadId || `t-${i}`}
                 thread={thread}
-                href={pluginPageHref(pluginId, "thread", { id: thread.threadId })}
+                href={pluginPageHref(pluginId, "thread", {
+                  id: thread.threadId,
+                })}
                 onOpen={captureScrollBeforeNavigation}
               />
             ))}
