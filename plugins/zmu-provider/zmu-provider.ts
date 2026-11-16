@@ -20,12 +20,22 @@ import type {
   TermCalendarQueryOptions,
   UnscheduledCourseQueryOptions,
 } from "@orahako/plugin-sdk/academic"
+import type { PluginQueryService, PluginSessionService } from "@orahako/plugin-sdk"
 import { BaseProvider } from "@orahako/plugin-sdk/provider-base"
 import { ProviderError, ProviderErrorCode } from "@orahako/plugin-sdk/provider-errors"
-import { clearAllCache, useAuthStore, useRefreshStore } from "@orahako/plugin-sdk/host"
 import { currentWeekFromContext } from "./protocol/mappers"
 import { ZMUClient } from "./protocol/client"
 import { ZMU_GPA_SCALE } from "./grade-scale"
+import { ZMU_CONFIG } from "./zmu-config"
+
+/** Injected host services the provider uses through public contracts only. */
+export interface ZMUProviderServices {
+  session: Pick<
+    PluginSessionService,
+    "getSnapshot" | "setCredential" | "clearCredential" | "createCookieJar" | "fetchWithJar"
+  >
+  query: Pick<PluginQueryService, "invalidate" | "clearPersistent">
+}
 
 const capabilities: AcademicCapabilities = {
   auth: true,
@@ -63,42 +73,38 @@ function rounded(value: number): { text: string; value: number } | undefined {
 }
 
 export class ZMUProvider extends BaseProvider {
-  readonly id = "zmu"
-  readonly name = "遵义医科大学"
+  readonly id = ZMU_CONFIG.id
+  readonly name = ZMU_CONFIG.name
   readonly capabilities = capabilities
   readonly gpaScale: ProviderGPAScale = ZMU_GPA_SCALE
-  readonly supportedPlugins = [
-    "orahako.overview",
-    "orahako.schedule",
-    "orahako.grades",
-    "orahako.exams",
-    "orahako.student-info",
-    "orahako.skbird",
-  ] as const
   private readonly client: ZMUClient
 
-  constructor(client = new ZMUClient()) {
+  constructor(
+    private readonly services: ZMUProviderServices,
+    client?: ZMUClient
+  ) {
     super()
-    this.client = client
+    this.client = client ?? new ZMUClient(services.session)
   }
 
   protected async onInitialize(): Promise<void> {
-    const state = useAuthStore.getState()
-    const credential = state.credentialsBySchool[this.id]?.credential ?? state.credential
+    const snapshot = this.services.session.getSnapshot()
+    if (snapshot.activeSchoolId && snapshot.activeSchoolId !== this.id) return
+    const credential = snapshot.credential
     if (!credential) return
     try {
       this.client.restore(credential)
-      if (!(await this.client.hasSession())) useAuthStore.getState().clearCredential(this.id)
+      if (!(await this.client.hasSession())) this.services.session.clearCredential(this.id)
     } catch {
       this.client.reset()
-      useAuthStore.getState().clearCredential(this.id)
+      this.services.session.clearCredential(this.id)
     }
   }
 
   protected async onReset(): Promise<void> {
     this.client.reset()
-    clearAllCache()
-    useRefreshStore.setState({ count: 0, stale: 0 })
+    this.services.query.clearPersistent()
+    this.services.query.invalidate()
   }
 
   async prepareLogin(): Promise<void> {
@@ -145,7 +151,11 @@ export class ZMUProvider extends BaseProvider {
       captcha,
     })
     if (result.credential) {
-      useAuthStore.getState().setCredential(result.credential, result.username, this.id)
+      this.services.session.setCredential({
+        schoolId: this.id,
+        credential: result.credential,
+        username: result.username,
+      })
     }
   }
 
@@ -187,7 +197,7 @@ export class ZMUProvider extends BaseProvider {
   }
 
   async checkAuthStatus(): Promise<AuthStatus> {
-    if (!useAuthStore.getState().credential) return { authenticated: false }
+    if (!this.services.session.getSnapshot().credential) return { authenticated: false }
     return { authenticated: await this.client.checkAuthStatus() }
   }
 
@@ -198,12 +208,12 @@ export class ZMUProvider extends BaseProvider {
       // 本地登出不因服务端会话已失效而阻塞。
     } finally {
       await this.reset()
-      useAuthStore.getState().clearCredential(this.id)
+      this.services.session.clearCredential(this.id)
     }
   }
 
   isAuthenticated(): boolean {
-    return useAuthStore.getState().isAuthenticated
+    return this.services.session.getSnapshot().isAuthenticated
   }
 
   async getStudentInfo(): Promise<StudentInfo> {

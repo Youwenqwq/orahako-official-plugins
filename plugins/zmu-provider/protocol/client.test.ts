@@ -1,7 +1,8 @@
 import { createCipheriv } from "node:crypto"
 import { describe, expect, it, vi } from "vitest"
-import type { HttpRequest, HttpResponse, SimpleCookieJar } from "@orahako/plugin-sdk/host"
+import type { CookieJar, HttpRequest, HttpResponse } from "@orahako/plugin-sdk"
 import { ProviderErrorCode } from "@orahako/plugin-sdk/provider-errors"
+import { createTestSession } from "../test-support"
 import { ZMUClient } from "./client"
 
 function response(body: string | ArrayBuffer, status = 200, headers = {}): HttpResponse {
@@ -14,11 +15,17 @@ function response(body: string | ArrayBuffer, status = 200, headers = {}): HttpR
   }
 }
 
-type Transport = (jar: SimpleCookieJar, request: HttpRequest) => Promise<HttpResponse>
+type Fetch = (jar: CookieJar, request: HttpRequest) => Promise<HttpResponse>
+
+function createClient(fetchWithJar: Fetch) {
+  const transport = vi.fn(fetchWithJar)
+  const { session } = createTestSession({ fetchWithJar: transport })
+  return { client: new ZMUClient(session), transport }
+}
 
 describe("ZMUClient", () => {
   it("loads a jar-bound captcha and encrypts the password with the captcha key", async () => {
-    const transport = vi.fn<Transport>(async (jar, request) => {
+    const { client, transport } = createClient(async (jar, request) => {
       if (request.url.endsWith("/")) {
         await jar.setCookie("JSESSIONID=session-1; Path=/; HttpOnly", request.url)
         return response('<form id="login-form"><input name="account"></form>')
@@ -33,7 +40,6 @@ describe("ZMUClient", () => {
       }
       throw new Error(`Unexpected ${request.url}`)
     })
-    const client = new ZMUClient(transport)
     await client.prepareLogin()
     await expect(client.refreshCaptcha()).resolves.toBe("data:image/jpeg;base64,AQID")
     await expect(client.login("20240001", "p@ss", "2enb")).resolves.toMatchObject({ code: 0 })
@@ -51,7 +57,7 @@ describe("ZMUClient", () => {
   })
 
   it("maps a login-page redirect from an academic request to session expiry", async () => {
-    const client = new ZMUClient(async () =>
+    const { client } = createClient(async () =>
       response('<form id="login-form"><input name="account"></form>')
     )
     await expect(client.getStudentInfo()).rejects.toMatchObject({
@@ -61,7 +67,7 @@ describe("ZMUClient", () => {
 
   it("discovers the current term and requests the aggregate schedule", async () => {
     const urls: string[] = []
-    const client = new ZMUClient(async (_jar, request) => {
+    const { client } = createClient(async (_jar, request) => {
       urls.push(request.url)
       if (request.url.includes("xsgrkbMain")) {
         return response("getXsgrbkList.action?xnxqdm=202601")
@@ -76,7 +82,7 @@ describe("ZMUClient", () => {
 
   it("uses all terms by default for grades and normalizes exam terms", async () => {
     const bodies: URLSearchParams[] = []
-    const client = new ZMUClient(async (_jar, request) => {
+    const { client } = createClient(async (_jar, request) => {
       if (request.url.includes("xsgrkbMain")) {
         return response("getXsgrbkList.action?xnxqdm=202601")
       }
@@ -88,5 +94,26 @@ describe("ZMUClient", () => {
     expect(bodies[0]?.get("xnxqdm")).toBe("")
     expect(bodies[0]?.get("rows")).toBe("1000")
     expect(bodies[1]?.get("xnxqdm")).toBe("202502")
+  })
+
+  it("restores and resets the session through the injected cookie-jar factory", async () => {
+    const { client } = createClient(async () => response(""))
+    client.restore(
+      JSON.stringify([
+        {
+          name: "JSESSIONID",
+          value: "restored",
+          domain: "jwxt.zmu.edu.cn",
+          path: "/",
+          secure: true,
+          expires: null,
+        },
+      ])
+    )
+    await expect(client.hasSession()).resolves.toBe(true)
+    expect(client.credential).toContain("restored")
+    client.reset()
+    await expect(client.hasSession()).resolves.toBe(false)
+    expect(client.credential).toBe("[]")
   })
 })

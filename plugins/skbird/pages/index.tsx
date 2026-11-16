@@ -31,10 +31,9 @@ import { SkbirdError, SKBIRD_ERRNO_TOKEN_INVALID } from "../client"
 import { getSkbirdClient, useSkbirdStore, useSkbirdUnreadCount } from "../store"
 import type { SkbirdCategory, SkbirdThread } from "../types"
 import {
-  readSkbirdFeedSnapshot,
+  skbirdFeedState,
   type SkbirdFeedSnapshot,
   type SkbirdFeedTab,
-  writeSkbirdFeedSnapshot,
 } from "../feed-state"
 import { SkbirdThreadCard } from "../components/thread-card"
 import { useLoadMoreSentinel } from "../components/use-load-more-sentinel"
@@ -55,7 +54,7 @@ const SEARCH_RANGES = [
   { value: "2y", labelKey: "skbird.range2y" },
 ] as const
 
-export function SkbirdIndexPage({ pluginId, navigate }: PluginPageProps) {
+export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps) {
   const { t } = useTranslation()
   const token = useSkbirdStore((s) => s.token)
   const hasHydrated = useSkbirdStore((s) => s.hasHydrated)
@@ -117,7 +116,7 @@ export function SkbirdIndexPage({ pluginId, navigate }: PluginPageProps) {
     }
     persistRef.current = () => {
       if (!hasHydrated || !token || !initializedRef.current || !feedStateRef.current) return
-      writeSkbirdFeedSnapshot({
+      skbirdFeedState.write({
         ...feedStateRef.current,
         cursor: cursorRef.current,
         searchPage: searchPageRef.current,
@@ -155,11 +154,12 @@ export function SkbirdIndexPage({ pluginId, navigate }: PluginPageProps) {
     }
   }, [])
 
-  // 列表页被详情页卸载后，从 sessionStorage 恢复筛选、已加载帖子和分页游标。
+  // 列表页被详情页卸载后，从插件会话内存恢复筛选、已加载帖子和分页游标。
+  // 会话内存只在本次插件激活内有效，不写宿主全局存储。
   useEffect(() => {
     if (!hasHydrated || !token || initializedRef.current) return
     initializedRef.current = true
-    const snapshot = readSkbirdFeedSnapshot()
+    const snapshot = skbirdFeedState.read()
     if (snapshot) {
       restoredRef.current = true
       snapshotAvailableRef.current = true
@@ -513,6 +513,7 @@ export function SkbirdIndexPage({ pluginId, navigate }: PluginPageProps) {
           <div className="flex flex-col gap-3 max-sm:gap-0">
             {threads.map((thread, i) => (
               <SkbirdThreadCard
+                context={context}
                 key={thread.threadId || `t-${i}`}
                 thread={thread}
                 href={pluginPageHref(pluginId, "thread", {

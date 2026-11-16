@@ -12,10 +12,11 @@ pnpm build:plugin -- community.perlica-toybox
 
 ## 宿主能力
 
-- HTTP：`@orahako/plugin-sdk/host` 的 `fetchStateless`；Web 通过 EdgeOne 代理访问 `client3.uqbike.cn`，目标 URL 使用 `x-proxy-target`，避免 Token 进入代理请求 URL。
-- 凭据：包自己的 Zustand persist 命名空间和宿主 `secureStorage`。
-- 定位：公共 Capacitor Geolocation 桥。Android 宿主声明定位权限；首次定位由系统询问授权。
-- 扫码：`html5-qrcode` 使用相机/相册；Android 宿主声明相机权限，实际访问仍由用户操作触发。
+- HTTP：`ctx.http.send`；Web 通过 EdgeOne 代理访问 `client3.uqbike.cn`，目标 URL 使用 `x-proxy-target`，避免 Token 进入代理请求 URL。
+- 凭据：`ctx.storage.secure` 的插件命名空间。Zustand store 在插件初始化时创建，随 Cordis 作用域释放，不使用模块级宿主单例。
+- 快照：页面数据缓存写入 `ctx.storage.local` 的插件命名空间，键为 `snapshot:<accountId>`，账号之间互相隔离；条目 12 小时后过期并自动删除。缓存只用于加速首屏，写入失败不影响实时请求。
+- 定位：`ctx.native.capabilities.invoke("native.geolocation", "getCurrentPosition")`；Web/PWA 或未装配该能力的宿主回退到 WebView 的 `navigator.geolocation`。Android 宿主声明定位权限；首次定位由系统询问授权。
+- 扫码：`html5-qrcode` 使用相机/相册；相机走 WebView 自身的权限流程，不需要额外原生桥能力。
 - 地图：包内打包 Leaflet 和样式，使用高德栅格瓦片。
 
 ## 适配边界

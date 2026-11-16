@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react"
 import { useMobileHeaderRight } from "@orahako/plugin-ui/stores"
-import { Geolocation, toast } from "@orahako/plugin-sdk/host"
+import { toast } from "sonner"
 import { pluginPageHref, type PluginPageProps } from "@orahako/plugin-sdk"
 import { PerlicaAccount } from "./components/perlica-account"
 import { PerlicaActiveRide } from "./components/perlica-active-ride"
@@ -53,10 +53,9 @@ import {
 import { Skeleton } from "@orahako/plugin-ui/components"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@orahako/plugin-ui/components"
 import { ToggleGroup, ToggleGroupItem } from "@orahako/plugin-ui/components"
-import { readPerlicaSnapshot, writePerlicaSnapshot } from "./extras/cache"
 import { PerlicaError } from "./extras/client"
 import { parsePerlicaCode } from "./extras/scan"
-import { getPerlicaClient, usePerlicaStore } from "./extras/store"
+import { usePerlicaRuntime, usePerlicaStore } from "./runtime"
 import type {
   PerlicaCoords,
   PerlicaGeoArea,
@@ -92,6 +91,7 @@ function safeServiceMessage(error: PerlicaError) {
 
 export function PerlicaPage({ params, navigate }: PluginPageProps) {
   const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
+  const runtime = usePerlicaRuntime()
   const token = usePerlicaStore((state) => state.token)
   const accountId = usePerlicaStore((state) => state.accountId)
   const hasHydrated = usePerlicaStore((state) => state.hasHydrated)
@@ -102,7 +102,10 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
   const setRadius = usePerlicaStore((state) => state.setRadius)
 
   const session = useMemo(() => ({ accountId, token }), [accountId, token])
-  const client = useMemo(() => (token && accountId ? getPerlicaClient() : null), [accountId, token])
+  const client = useMemo(
+    () => (token && accountId ? runtime.getClient() : null),
+    [accountId, runtime, token]
+  )
   const activeTab = perlicaTab(params)
   const setActiveTab = useCallback(
     (tab: PerlicaTab) => navigate(PERLICA_PAGE_INDEX, { tab }),
@@ -185,9 +188,9 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
       }
       setOrder(next)
       setOrderLoaded(true)
-      writePerlicaSnapshot(session.accountId, { order: next, orderAt: Date.now() })
+      void runtime.cache.write(session.accountId, { order: next, orderAt: Date.now() })
     },
-    [isSessionActive, session.accountId]
+    [isSessionActive, runtime, session.accountId]
   )
 
   const showOptimisticOrder = useCallback(
@@ -196,11 +199,11 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
       optimisticOrderRef.current = { order: next, until: Date.now() + 15_000 }
       setOrder(next)
       setOrderLoaded(true)
-      writePerlicaSnapshot(session.accountId, { order: next, orderAt: Date.now() })
+      void runtime.cache.write(session.accountId, { order: next, orderAt: Date.now() })
       setSelectedCode("")
       setActiveTab("ride")
     },
-    [isSessionActive, session.accountId, setActiveTab]
+    [isSessionActive, runtime, session.accountId, setActiveTab]
   )
 
   const loadNearby = useCallback(
@@ -220,7 +223,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         setMachines(result)
         setMapError(false)
         loadedAtRef.current.machines = Date.now()
-        writePerlicaSnapshot(session.accountId, {
+        void runtime.cache.write(session.accountId, {
           machines: result,
           machinesAt: Date.now(),
           center: targetCenter,
@@ -253,12 +256,12 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (!isSessionActive() || request !== geoRequestRef.current) return
         setGeoArea(result)
         loadedAtRef.current.geo = Date.now()
-        writePerlicaSnapshot(session.accountId, { geoArea: result, geoAreaAt: Date.now() })
+        void runtime.cache.write(session.accountId, { geoArea: result, geoAreaAt: Date.now() })
       } catch (error) {
         if (isSessionActive() && request === geoRequestRef.current) reportError(error)
       }
     },
-    [center, client, isSessionActive, reportError, session.accountId]
+    [center, client, isSessionActive, reportError, runtime, session.accountId]
   )
 
   const loadMapPoints = useCallback(
@@ -292,12 +295,12 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (!isSessionActive()) return
         setUser(result)
         loadedAtRef.current.user = Date.now()
-        writePerlicaSnapshot(session.accountId, { user: result, userAt: Date.now() })
+        void runtime.cache.write(session.accountId, { user: result, userAt: Date.now() })
       } catch (error) {
         if (isSessionActive()) reportError(error)
       }
     },
-    [client, isSessionActive, reportError, session.accountId]
+    [client, isSessionActive, reportError, runtime, session.accountId]
   )
 
   const loadCards = useCallback(
@@ -314,12 +317,12 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (!isSessionActive()) return
         setCards(result)
         loadedAtRef.current.cards = Date.now()
-        writePerlicaSnapshot(session.accountId, { cards: result, cardsAt: Date.now() })
+        void runtime.cache.write(session.accountId, { cards: result, cardsAt: Date.now() })
       } catch (error) {
         if (isSessionActive()) reportError(error)
       }
     },
-    [center, client, isSessionActive, reportError, session.accountId]
+    [center, client, isSessionActive, reportError, runtime, session.accountId]
   )
 
   const refreshMapAt = useCallback(
@@ -414,7 +417,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         setLogs((previous) => {
           if (!isSessionActive()) return previous
           const next = append ? [...previous, ...result] : result
-          writePerlicaSnapshot(session.accountId, { logs: next, logsAt: Date.now() })
+          void runtime.cache.write(session.accountId, { logs: next, logsAt: Date.now() })
           return next
         })
         setLogPage(page)
@@ -426,7 +429,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (isSessionActive() && request === logsRequestRef.current) setLogsLoading(false)
       }
     },
-    [client, isSessionActive, reportError, session.accountId]
+    [client, isSessionActive, reportError, runtime, session.accountId]
   )
 
   const refreshAll = useCallback(async () => {
@@ -468,40 +471,43 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
     setLocating(false)
     loadedAtRef.current = { machines: 0, user: 0, cards: 0, logs: 0, geo: 0, unread: 0 }
 
-    const snapshot = readPerlicaSnapshot(session.accountId)
-    if (snapshot) {
-      setMachines(snapshot.machines)
-      setUser(snapshot.user)
-      setOrder(snapshot.order)
-      setOrderLoaded(snapshot.orderAt > 0)
-      setLogs(snapshot.logs)
-      setCards(snapshot.cards)
-      setGeoArea(snapshot.geoArea)
-      loadedAtRef.current = {
-        machines: snapshot.machinesAt,
-        user: snapshot.userAt,
-        cards: snapshot.cardsAt,
-        logs: snapshot.logsAt,
-        geo: snapshot.geoAreaAt,
-        unread: 0,
+    void (async () => {
+      const snapshot = await runtime.cache.read(session.accountId)
+      if (!isSessionActive()) return
+      if (snapshot) {
+        setMachines(snapshot.machines)
+        setUser(snapshot.user)
+        setOrder(snapshot.order)
+        setOrderLoaded(snapshot.orderAt > 0)
+        setLogs(snapshot.logs)
+        setCards(snapshot.cards)
+        setGeoArea(snapshot.geoArea)
+        loadedAtRef.current = {
+          machines: snapshot.machinesAt,
+          user: snapshot.userAt,
+          cards: snapshot.cardsAt,
+          logs: snapshot.logsAt,
+          geo: snapshot.geoAreaAt,
+          unread: 0,
+        }
       }
-    }
-    void Promise.all([
-      loadNearby(true),
-      loadGeo(true),
-      loadMapPoints(),
-      loadAccount(true),
-      loadOrder(),
-      loadLogs(1, false, true),
-      client
-        .remandPoints()
-        .then((result) => {
-          if (isSessionActive()) setRemandPoints(result)
-        })
-        .catch((error) => {
-          if (isSessionActive()) reportError(error)
-        }),
-    ])
+      await Promise.all([
+        loadNearby(true),
+        loadGeo(true),
+        loadMapPoints(),
+        loadAccount(true),
+        loadOrder(),
+        loadLogs(1, false, true),
+        client
+          .remandPoints()
+          .then((result) => {
+            if (isSessionActive()) setRemandPoints(result)
+          })
+          .catch((error) => {
+            if (isSessionActive()) reportError(error)
+          }),
+      ])
+    })()
   }, [
     client,
     hasHydrated,
@@ -513,6 +519,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
     loadNearby,
     loadOrder,
     reportError,
+    runtime,
     session,
   ])
 
@@ -539,11 +546,8 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
       if (locating || !isSessionActive()) return null
       setLocating(true)
       try {
-        // The host exports the Capacitor Geolocation bridge so plugins do not
-        // depend on native packages directly.
-        const position = await Geolocation.getCurrentPosition({ enableHighAccuracy: true })
+        const coords = await runtime.locate()
         if (!isSessionActive()) return null
-        const coords = { lat: position.coords.latitude, lng: position.coords.longitude }
         setCenter(coords)
         if (refreshMap) toast.success(t("perlica.locationUpdated"))
         return coords
@@ -554,7 +558,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (isSessionActive()) setLocating(false)
       }
     },
-    [isSessionActive, locating, setCenter, t]
+    [isSessionActive, locating, runtime, setCenter, t]
   )
 
   const handleCenterSelect = useCallback(

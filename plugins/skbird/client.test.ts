@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { HttpRequest, HttpResponse } from "@orahako/plugin-sdk/host"
+import type {
+  HttpRequest,
+  HttpResponse,
+  PluginHttpService,
+} from "@orahako/plugin-sdk"
 import { makeSign, type SignEntry } from "./sign"
+import { SkbirdClient, SkbirdError, generateDeviceId, skbirdImageUrl } from "./client"
 
 const sendMock = vi.fn<(req: HttpRequest) => Promise<HttpResponse>>()
 
-vi.mock("@orahako/plugin-sdk/host", () => ({
-  fetchStateless: (req: HttpRequest) => sendMock(req),
-}))
-
-import { SkbirdClient, SkbirdError, generateDeviceId, skbirdImageUrl } from "./client"
+const http: PluginHttpService = {
+  send: sendMock,
+  activity: {
+    getSnapshot: () => ({ active: [], history: [], session: null, revision: 0 }),
+    subscribe: () => () => {},
+    registerLabeler: () => () => {},
+  },
+}
 
 const CONFIG = { token: "TOKEN", deviceId: "DEVICE", alias: "ysu" }
 
@@ -86,7 +94,7 @@ describe("generateDeviceId", () => {
 describe("SkbirdClient 请求契约", () => {
   it("GET：query 参数并入签名，头部齐全", async () => {
     sendMock.mockResolvedValue(okResponse({ list: [] }))
-    await new SkbirdClient(CONFIG).latest()
+    await new SkbirdClient(http, CONFIG).latest()
 
     const req = sendMock.mock.calls[0]![0]
     expect(req.method).toBe("GET")
@@ -104,7 +112,7 @@ describe("SkbirdClient 请求契约", () => {
 
   it("POST：form body 参数并入签名", async () => {
     sendMock.mockResolvedValue(okResponse({ detail: {} }))
-    await new SkbirdClient(CONFIG).thread("123")
+    await new SkbirdClient(http, CONFIG).thread("123")
 
     const req = sendMock.mock.calls[0]![0]
     expect(req.method).toBe("POST")
@@ -119,7 +127,7 @@ describe("SkbirdClient 请求契约", () => {
       ...okResponse(null),
       text: async () => JSON.stringify({ errno: 10, errmsg: "用户本地网络异常" }),
     })
-    const err = await new SkbirdClient(CONFIG).hot().catch((e: unknown) => e)
+    const err = await new SkbirdClient(http, CONFIG).hot().catch((e: unknown) => e)
     expect(err).toBeInstanceOf(SkbirdError)
     expect((err as SkbirdError).errno).toBe(10)
   })
@@ -131,7 +139,7 @@ describe("SkbirdClient 请求契约", () => {
         t_sign: "SIGN+BLOB==",
       })
     )
-    const d = await new SkbirdClient(CONFIG).thread("123")
+    const d = await new SkbirdClient(http, CONFIG).thread("123")
     expect(d.thread.threadId).toBe("123")
     expect(d.thread.title).toBe("t")
     expect(d.commentSign).toBe("SIGN+BLOB==")
@@ -139,7 +147,7 @@ describe("SkbirdClient 请求契约", () => {
 
   it("comments()：t_sign 作为 sign 参数并入签名", async () => {
     sendMock.mockResolvedValue(okResponse({ list: [{ comment_id: 1, content: "hi" }] }))
-    const list = await new SkbirdClient(CONFIG).comments("123", "SIGN+BLOB==")
+    const list = await new SkbirdClient(http, CONFIG).comments("123", "SIGN+BLOB==")
 
     expect(list).toHaveLength(1)
     expect(list[0]!.content).toBe("hi")
@@ -153,7 +161,7 @@ describe("SkbirdClient 请求契约", () => {
   })
 
   it("comments()：无 t_sign 时直接返回空，不发请求", async () => {
-    await expect(new SkbirdClient(CONFIG).comments("123", "")).resolves.toEqual([])
+    await expect(new SkbirdClient(http, CONFIG).comments("123", "")).resolves.toEqual([])
     expect(sendMock).not.toHaveBeenCalled()
   })
 
@@ -170,7 +178,7 @@ describe("SkbirdClient 请求契约", () => {
         ],
       })
     )
-    const list = await new SkbirdClient(CONFIG).categories()
+    const list = await new SkbirdClient(http, CONFIG).categories()
     expect(list).toEqual([
       {
         cateId: "101",
@@ -183,7 +191,7 @@ describe("SkbirdClient 请求契约", () => {
 
   it("latest()：cateId 与 from_time 游标并入签名", async () => {
     sendMock.mockResolvedValue(okResponse({ list: [] }))
-    await new SkbirdClient(CONFIG).latest("1787378674", "101")
+    await new SkbirdClient(http, CONFIG).latest("1787378674", "101")
     const req = sendMock.mock.calls[0]![0]
     expect(req.url).toContain("cate_id=101")
     expect(req.url).toContain("from_time=1787378674")
@@ -192,7 +200,7 @@ describe("SkbirdClient 请求契约", () => {
 
   it("rewardList()：正确路径与游标参数", async () => {
     sendMock.mockResolvedValue(okResponse({ list: [] }))
-    await new SkbirdClient(CONFIG).rewardList("1787378674")
+    await new SkbirdClient(http, CONFIG).rewardList("1787378674")
     const req = sendMock.mock.calls[0]![0]
     expect(req.url).toMatch(/\/thread\/rewardlist\?/)
     expect(req.url).toContain("from_time=1787378674")
@@ -201,14 +209,14 @@ describe("SkbirdClient 请求契约", () => {
 
   it("like()：评论点赞携带 comment_id", async () => {
     sendMock.mockResolvedValue(okResponse({}))
-    await new SkbirdClient(CONFIG).like("123", 1, "456")
+    await new SkbirdClient(http, CONFIG).like("123", 1, "456")
     const req = sendMock.mock.calls[0]![0]
     expect(req.body).toBe("action=1&id=123&comment_id=456")
     expect(resignFromCaptured(req)).toBe(req.headers?.["X-Sc-Ah"])
   })
 
   it("messages()/unreadNum()/likeStat()/userStats()：字段映射", async () => {
-    const client = new SkbirdClient(CONFIG)
+    const client = new SkbirdClient(http, CONFIG)
     sendMock.mockResolvedValueOnce(
       okResponse({
         list: [{ msg_id: "1", content: "c", nickname: "n", p_time: 1787378674 }],
@@ -257,7 +265,7 @@ describe("SkbirdClient 请求契约", () => {
         ],
       })
     )
-    const list = await new SkbirdClient(CONFIG).comments("123", "S")
+    const list = await new SkbirdClient(http, CONFIG).comments("123", "S")
     expect(list[0]!.likeHas).toBe(true)
     expect(list[0]!.replies).toHaveLength(1)
     expect(list[0]!.replies[0]).toMatchObject({
@@ -281,7 +289,7 @@ describe("SkbirdClient 请求契约", () => {
         ],
       })
     )
-    const t = await new SkbirdClient(CONFIG).unlockThread("9")
+    const t = await new SkbirdClient(http, CONFIG).unlockThread("9")
     expect(t).toMatchObject({
       threadId: "9",
       title: "认证帖标题",
@@ -303,7 +311,7 @@ describe("SkbirdClient 请求契约", () => {
         })
       ) // mark/list
       .mockResolvedValueOnce(okResponse({})) // mark 2
-    const t = await new SkbirdClient(CONFIG).unlockThread("9")
+    const t = await new SkbirdClient(http, CONFIG).unlockThread("9")
     expect(t).toMatchObject({ threadId: "9", title: "全文标题", imgPaths: [] })
     const paths = sendMock.mock.calls.map((c) => c[0].url)
     expect(paths[1]).toContain("/thread/rewardlist")
@@ -329,13 +337,13 @@ describe("SkbirdClient 请求契约", () => {
           ],
         })
       ) // rewardlist 命中
-    const t = await new SkbirdClient(CONFIG).unlockThread("9")
+    const t = await new SkbirdClient(http, CONFIG).unlockThread("9")
     expect(t).toMatchObject({ threadId: "9", imgPaths: ["upload/r.jpg"] })
     expect(sendMock).toHaveBeenCalledTimes(2)
   })
 
   it("search()：cate_id=10 实时帖不带 range；cate_id=20 历史帖 range 生效", async () => {
-    const client = new SkbirdClient(CONFIG)
+    const client = new SkbirdClient(http, CONFIG)
     sendMock.mockResolvedValue(okResponse({ list: [] }))
 
     await client.search("肯德基", 1, "")
@@ -365,7 +373,7 @@ describe("SkbirdClient 请求契约", () => {
         },
       })
     )
-    const u = await new SkbirdClient(CONFIG).userInfo()
+    const u = await new SkbirdClient(http, CONFIG).userInfo()
     expect(u).toEqual({
       nickname: "Test User",
       avatarUrl: "https://example.invalid/avatar.png",

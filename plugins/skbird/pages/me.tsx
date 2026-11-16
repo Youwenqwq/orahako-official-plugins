@@ -13,7 +13,7 @@ import { getSkbirdClient, useSkbirdStore } from "../store"
 import type { SkbirdLikeStat, SkbirdUser, SkbirdUserStats } from "../types"
 import { SkbirdImage } from "../components/skbird-image"
 
-export function SkbirdMePage({ navigate }: PluginPageProps) {
+export function SkbirdMePage({ context, navigate }: PluginPageProps) {
   const { t } = useTranslation()
   const hasHydrated = useSkbirdStore((s) => s.hasHydrated)
   const token = useSkbirdStore((s) => s.token)
@@ -97,6 +97,7 @@ export function SkbirdMePage({ navigate }: PluginPageProps) {
             <>
               {user.avatarUrl ? (
                 <SkbirdImage
+                  context={context}
                   url={skbirdImageUrl(user.avatarUrl, { w: 100, h: 100 })}
                   alt={user.nickname}
                   className="size-14 rounded-full object-cover"

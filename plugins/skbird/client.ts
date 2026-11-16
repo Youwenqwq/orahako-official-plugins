@@ -3,13 +3,13 @@
  *
  * - 签名：每请求 X-Sc-Ah（见 sign.ts）；GET 的 query 与 POST 的 form body
  *   均须并入签名参数（解码后的明文值）。
- * - 传输：fetchStateless → native 走 CapacitorHttp 直连（明文 HTTP，已在
+ * - 传输：`ctx.http.send` → native 走 CapacitorHttp 直连（明文 HTTP，已在
  *   network_security_config.xml 放行）；Web 走 /api/proxy 边缘代理。
  * - 鉴权：X-Sc-Token 手动配置（微信登录 code 无法脚本化，过期需重新抓包）。
  *
  * 参考实现：purepy/zanao.py（签名 118/118 抓包验证）。
  */
-import { fetchStateless } from "@orahako/plugin-sdk/host"
+import type { PluginHttpService } from "@orahako/plugin-sdk"
 import { makeSign, type SignEntry } from "./sign"
 import {
   toCategoryList,
@@ -113,7 +113,10 @@ function randomNd(): string {
 }
 
 export class SkbirdClient {
-  constructor(private readonly config: SkbirdConfig) {}
+  constructor(
+    private readonly http: PluginHttpService,
+    private readonly config: SkbirdConfig
+  ) {}
 
   private async call(
     method: "GET" | "POST",
@@ -144,7 +147,7 @@ export class SkbirdClient {
     }
     if (method === "POST") headers["Content-Type"] = "application/x-www-form-urlencoded"
 
-    const res = await fetchStateless({
+    const res = await this.http.send({
       method,
       url: method === "GET" && encoded ? `${BASE}${path}?${encoded}` : `${BASE}${path}`,
       headers,

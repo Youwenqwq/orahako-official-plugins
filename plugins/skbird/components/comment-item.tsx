@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { ThumbsUp } from "lucide-react"
+import type { PluginContext } from "@orahako/plugin-sdk"
 import { Badge } from "@orahako/plugin-ui/components"
 import { useTranslation } from "@orahako/plugin-ui/hooks"
 import { skbirdImageUrl } from "../client"
@@ -10,10 +11,12 @@ import type { SkbirdComment } from "../types"
 import { SkbirdImage } from "./skbird-image"
 
 export function SkbirdCommentItem({
+  context,
   comment,
   threadId,
   depth = 0,
 }: {
+  context: PluginContext
   comment: SkbirdComment
   threadId: string
   depth?: number
@@ -44,6 +47,7 @@ export function SkbirdCommentItem({
       <div className="flex gap-2.5">
         {comment.avatarUrl ? (
           <SkbirdImage
+            context={context}
             url={skbirdImageUrl(comment.avatarUrl, { w: 64, h: 64 })}
             alt={comment.nickname}
             className="mt-0.5 size-7 shrink-0 rounded-full object-cover"
@@ -81,6 +85,7 @@ export function SkbirdCommentItem({
         <div className="mt-3 flex flex-col gap-3">
           {comment.replies.map((r) => (
             <SkbirdCommentItem
+              context={context}
               key={r.commentId}
               comment={r}
               threadId={threadId}

@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest"
 import {
-  readSkbirdFeedSnapshot,
-  SKBIRD_FEED_STATE_KEY,
+  createSkbirdFeedStateStore,
   type SkbirdFeedSnapshot,
-  writeSkbirdFeedSnapshot,
+  type SkbirdFeedStateStorage,
 } from "./feed-state"
 
-function makeStorage() {
-  const values = new Map<string, string>()
+function createSlot(initial: string | null = null): SkbirdFeedStateStorage {
+  let value = initial
   return {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => values.set(key, value),
+    getItem: () => value,
+    setItem: (next) => {
+      value = next
+    },
   }
 }
 
@@ -32,20 +33,29 @@ const SNAPSHOT: SkbirdFeedSnapshot = {
 
 describe("skbird feed state", () => {
   it("保存并恢复列表筛选、分页和滚动状态", () => {
-    const storage = makeStorage()
+    const store = createSkbirdFeedStateStore(createSlot())
 
-    writeSkbirdFeedSnapshot(SNAPSHOT, storage)
+    store.write(SNAPSHOT)
 
-    expect(readSkbirdFeedSnapshot(storage)).toEqual(SNAPSHOT)
+    expect(store.read()).toEqual(SNAPSHOT)
   })
 
   it("忽略旧版本或损坏的快照，避免阻断列表加载", () => {
-    const storage = makeStorage()
-    storage.setItem(
-      SKBIRD_FEED_STATE_KEY,
-      JSON.stringify({ ...SNAPSHOT, version: 0, threads: "invalid" })
+    const oldVersion = createSkbirdFeedStateStore(
+      createSlot(JSON.stringify({ ...SNAPSHOT, version: 0, threads: "invalid" }))
     )
+    expect(oldVersion.read()).toBeNull()
 
-    expect(readSkbirdFeedSnapshot(storage)).toBeNull()
+    const malformed = createSkbirdFeedStateStore(createSlot("not json"))
+    expect(malformed.read()).toBeNull()
+  })
+
+  it("会话作用域相互隔离，不写入宿主存储", () => {
+    const first = createSkbirdFeedStateStore(createSlot())
+    const second = createSkbirdFeedStateStore(createSlot())
+
+    first.write(SNAPSHOT)
+
+    expect(second.read()).toBeNull()
   })
 })

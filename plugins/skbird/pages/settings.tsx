@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import type { PluginPageProps } from "@orahako/plugin-sdk"
 import { Button } from "@orahako/plugin-ui/components"
 import {
   Card,
@@ -17,9 +18,9 @@ import { useTranslation } from "@orahako/plugin-ui/hooks"
 import { SkbirdClient, generateDeviceId } from "../client"
 import { useSkbirdStore } from "../store"
 
-export function SkbirdSettingsPage() {
+export function SkbirdSettingsPage({ context }: PluginPageProps) {
   const { t } = useTranslation()
-  const { token, deviceId, alias, hasHydrated, setConfig } = useSkbirdStore()
+  const { token, deviceId, alias, hasHydrated, setConfig } = useSkbirdStore((s) => s)
 
   const [tokenInput, setTokenInput] = useState("")
   const [deviceIdInput, setDeviceIdInput] = useState("")
@@ -41,7 +42,7 @@ export function SkbirdSettingsPage() {
   async function handleTest() {
     setTesting(true)
     try {
-      const client = new SkbirdClient({
+      const client = new SkbirdClient(context.http, {
         token: tokenInput.trim(),
         deviceId: deviceIdInput.trim() || generateDeviceId(),
         alias: aliasInput.trim() || "ysu",

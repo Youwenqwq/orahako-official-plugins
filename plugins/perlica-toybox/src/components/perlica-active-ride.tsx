@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Bike, CheckCircle2, Clock3, MapPin, Pause, Play, RotateCcw } from "lucide-react"
-import { toast } from "@orahako/plugin-sdk/host"
+import { toast } from "sonner"
 import { Badge } from "@orahako/plugin-ui/components"
 import { Button } from "@orahako/plugin-ui/components"
 import { Card, CardContent } from "@orahako/plugin-ui/components"

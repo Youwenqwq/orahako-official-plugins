@@ -12,7 +12,7 @@
 
 ## 安装与使用
 
-需要带 Cordis 插件系统的 Orahako 0.15.0+（当前上游 `refactor/cordis` 分支，旧 `main` 不能安装）。
+需要带 Cordis 插件系统的 Orahako 0.16.0+（当前上游 `refactor/cordis` 分支，旧 `main` 不能安装）。
 
 在插件管理中导入 `community.theme.yuna` ZIP 并启用，在同页主题区域选择 `YUNA · 102`、`YUNA · 明日方舟` 或 `YUNA · 红魔馆`。明暗继续使用应用设置。停用插件或切回默认主题即可恢复原样；插件不自行写入主题偏好。
 

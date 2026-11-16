@@ -1,7 +1,5 @@
 import type { SkbirdThread } from "./types"
 
-export const SKBIRD_FEED_STATE_KEY = "skbird-feed-state"
-
 export type SkbirdFeedTab = "hot" | "latest" | "top" | "reward"
 
 export interface SkbirdFeedSnapshot {
@@ -20,7 +18,32 @@ export interface SkbirdFeedSnapshot {
   mainScrollTop: number
 }
 
-type StorageLike = Pick<Storage, "getItem" | "setItem">
+/**
+ * Backing slot for the session-scoped feed state. The host storage service has
+ * no session adapter, so the default is a plugin-local in-memory slot: state
+ * survives page navigation within one plugin activation and is dropped when
+ * the app reloads or the plugin is disposed. Nothing is written to host
+ * globals, so no key can collide with another plugin.
+ */
+export interface SkbirdFeedStateStorage {
+  getItem(): string | null
+  setItem(value: string): void
+}
+
+function createMemorySessionStorage(): SkbirdFeedStateStorage {
+  let value: string | null = null
+  return {
+    getItem: () => value,
+    setItem: (next) => {
+      value = next
+    },
+  }
+}
+
+export interface SkbirdFeedStateStore {
+  read(): SkbirdFeedSnapshot | null
+  write(snapshot: SkbirdFeedSnapshot): void
+}
 
 function isFeedTab(value: unknown): value is SkbirdFeedTab {
   return value === "hot" || value === "latest" || value === "top" || value === "reward"
@@ -55,27 +78,33 @@ function isSnapshot(value: unknown): value is SkbirdFeedSnapshot {
   )
 }
 
-export function readSkbirdFeedSnapshot(storage?: StorageLike): SkbirdFeedSnapshot | null {
-  const target = storage ?? (typeof window === "undefined" ? undefined : window.sessionStorage)
-  if (!target) return null
-
-  try {
-    const raw = target.getItem(SKBIRD_FEED_STATE_KEY)
-    if (!raw) return null
-    const value: unknown = JSON.parse(raw)
-    return isSnapshot(value) ? value : null
-  } catch {
-    return null
+export function createSkbirdFeedStateStore(
+  storage: SkbirdFeedStateStorage = createMemorySessionStorage()
+): SkbirdFeedStateStore {
+  return {
+    read() {
+      try {
+        const raw = storage.getItem()
+        if (!raw) return null
+        const value: unknown = JSON.parse(raw)
+        return isSnapshot(value) ? value : null
+      } catch {
+        return null
+      }
+    },
+    write(snapshot) {
+      try {
+        storage.setItem(JSON.stringify(snapshot))
+      } catch {
+        // A failed session write must not block list navigation.
+      }
+    },
   }
 }
 
-export function writeSkbirdFeedSnapshot(snapshot: SkbirdFeedSnapshot, storage?: StorageLike): void {
-  const target = storage ?? (typeof window === "undefined" ? undefined : window.sessionStorage)
-  if (!target) return
-
-  try {
-    target.setItem(SKBIRD_FEED_STATE_KEY, JSON.stringify(snapshot))
-  } catch {
-    // sessionStorage unavailable or quota exceeded
-  }
-}
+/**
+ * Session-only store shared by the plugin's list and detail pages. It keeps
+ * filters, loaded threads, pagination cursors and scroll offsets while the
+ * user moves between pages, and deliberately does not outlive the app.
+ */
+export const skbirdFeedState = createSkbirdFeedStateStore()

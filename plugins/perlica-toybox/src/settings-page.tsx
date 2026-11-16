@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Check, LogOut } from "lucide-react"
-import { toast } from "@orahako/plugin-sdk/host"
+import { toast } from "sonner"
 import { pluginPageHref, type PluginPageProps } from "@orahako/plugin-sdk"
 import { PERLICA_PLUGIN_ID, PERLICA_PAGE_INDEX } from "./constants"
 import { perlicaTab } from "./extras/app-nav"
@@ -23,14 +23,15 @@ import {
   Textarea,
 } from "@orahako/plugin-ui/components"
 import { PerlicaAccountVerification } from "./components/perlica-account"
-import { clearPerlicaSnapshot, readPerlicaSnapshot } from "./extras/cache"
-import { PerlicaClient, PerlicaError } from "./extras/client"
-import { usePerlicaStore } from "./extras/store"
+import type { PerlicaSnapshot } from "./extras/cache"
+import { PerlicaError } from "./extras/client"
+import { usePerlicaRuntime, usePerlicaStore } from "./runtime"
 import { parsePerlicaToken } from "./extras/types"
 import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
 
 export function PerlicaSettingsPage({ params }: PluginPageProps) {
   const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
+  const runtime = usePerlicaRuntime()
   const activeTab = perlicaTab(params)
   const token = usePerlicaStore((state) => state.token)
   const accountId = usePerlicaStore((state) => state.accountId)
@@ -63,10 +64,20 @@ export function PerlicaSettingsPage({ params }: PluginPageProps) {
     setAdAccountInput(adAccountId || "11423")
   }, [adAccountId, hasHydrated, token])
 
-  const debugSnapshot = useMemo(() => {
-    if (!hasHydrated || !accountId) return null
-    return readPerlicaSnapshot(accountId)
-  }, [accountId, hasHydrated])
+  const [debugSnapshot, setDebugSnapshot] = useState<PerlicaSnapshot | null>(null)
+  useEffect(() => {
+    if (!hasHydrated || !accountId) {
+      setDebugSnapshot(null)
+      return
+    }
+    let cancelled = false
+    void runtime.cache.read(accountId).then((snapshot) => {
+      if (!cancelled) setDebugSnapshot(snapshot)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [accountId, hasHydrated, runtime])
   const debugJson = useMemo(() => {
     if (!debugSnapshot) return ""
     return JSON.stringify(debugSnapshot, null, 2)
@@ -95,12 +106,15 @@ export function PerlicaSettingsPage({ params }: PluginPageProps) {
         accountId: parsed.accountId,
         adAccountId: adAccountInput.trim() || "11423",
       }
-      const client = new PerlicaClient(config)
+      const client = runtime.createClient(config)
       const info = await client.userInfo()
       if (!mountedRef.current || generation !== validationGenerationRef.current) return
       if (accountId !== parsed.accountId) {
-        clearPerlicaSnapshot(accountId)
-        clearPerlicaSnapshot(parsed.accountId)
+        await Promise.all([
+          runtime.cache.clear(accountId),
+          runtime.cache.clear(parsed.accountId),
+        ])
+        if (!mountedRef.current || generation !== validationGenerationRef.current) return
       }
       setValidating(false)
       login(config)
@@ -133,7 +147,7 @@ export function PerlicaSettingsPage({ params }: PluginPageProps) {
   function handleLogout() {
     validationGenerationRef.current += 1
     setValidating(false)
-    clearPerlicaSnapshot(accountId)
+    void runtime.cache.clear(accountId)
     logout()
     setInput("")
     setAdAccountInput("11423")

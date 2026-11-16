@@ -1,9 +1,9 @@
-import {
-  fetchWithJar,
-  SimpleCookieJar,
-  type HttpRequest,
-  type HttpResponse,
-} from "@orahako/plugin-sdk/host"
+import type {
+  CookieJar,
+  HttpRequest,
+  HttpResponse,
+  PluginSessionService,
+} from "@orahako/plugin-sdk"
 import { aes128EcbEncrypt, bytesToBase64 } from "@orahako/plugin-sdk/crypto"
 import type {
   ExamQueryOptions,
@@ -21,10 +21,12 @@ import {
   semesterCode,
   type ZmuTermContext,
 } from "./mappers"
+import { ZMU_CONFIG } from "../zmu-config"
 
-export const ZMU_BASE_URL = "https://jwxt.zmu.edu.cn"
+const ZMU_BASE_URL = ZMU_CONFIG.jwxt.jwxtBaseUrl
 
-type Transport = (jar: SimpleCookieJar, request: HttpRequest) => Promise<HttpResponse>
+/** The session subset a ZMU client needs: a cookie jar plus jar-bound fetch. */
+export type ZMUClientSession = Pick<PluginSessionService, "createCookieJar" | "fetchWithJar">
 
 export interface ZmuLoginResult {
   code: number
@@ -49,11 +51,13 @@ function parseJson(text: string): unknown {
 }
 
 export class ZMUClient {
-  private jar = new SimpleCookieJar()
+  private jar: CookieJar
   private currentSemesterCode: string | undefined
   private captchaDataUrl: string | null = null
 
-  constructor(private readonly transport: Transport = fetchWithJar) {}
+  constructor(private readonly session: ZMUClientSession) {
+    this.jar = session.createCookieJar()
+  }
 
   get credential(): string {
     return this.jar.toJSON()
@@ -68,13 +72,13 @@ export class ZMUClient {
   }
 
   restore(credential: string): void {
-    this.jar = SimpleCookieJar.fromJSON(credential)
+    this.jar = this.session.createCookieJar(credential)
     this.currentSemesterCode = undefined
     this.captchaDataUrl = null
   }
 
   reset(): void {
-    this.jar = new SimpleCookieJar()
+    this.jar = this.session.createCookieJar()
     this.currentSemesterCode = undefined
     this.captchaDataUrl = null
   }
@@ -89,24 +93,25 @@ export class ZMUClient {
       proxyTargetInHeader?: boolean
     } = {}
   ): Promise<HttpResponse> {
+    const request: HttpRequest = {
+      method: init.method ?? "GET",
+      url: `${ZMU_BASE_URL}${path}`,
+      headers: {
+        referer: `${ZMU_BASE_URL}/`,
+        ...(init.method === "POST"
+          ? {
+              "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+              "x-requested-with": "XMLHttpRequest",
+            }
+          : {}),
+      },
+      body: init.body,
+      redirect: "follow",
+      responseType: init.responseType,
+      proxyTargetInHeader: init.proxyTargetInHeader,
+    }
     try {
-      const response = await this.transport(this.jar, {
-        method: init.method ?? "GET",
-        url: `${ZMU_BASE_URL}${path}`,
-        headers: {
-          referer: `${ZMU_BASE_URL}/`,
-          ...(init.method === "POST"
-            ? {
-                "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "x-requested-with": "XMLHttpRequest",
-              }
-            : {}),
-        },
-        body: init.body,
-        redirect: "follow",
-        responseType: init.responseType,
-        proxyTargetInHeader: init.proxyTargetInHeader,
-      })
+      const response = await this.session.fetchWithJar(this.jar, request)
       if (response.status === 401 || response.status === 403) {
         throw new ProviderError(
           init.authenticated === false

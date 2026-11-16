@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { BellRing, LocateFixed, LockOpen, RefreshCw, TriangleAlert } from "lucide-react"
-import { toast } from "@orahako/plugin-sdk/host"
+import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "@orahako/plugin-ui/components"
 import { Badge } from "@orahako/plugin-ui/components"
 import { Button } from "@orahako/plugin-ui/components"

@@ -13,7 +13,7 @@ import type { SkbirdMessage, SkbirdUnread } from "../types"
 import { SkbirdImage } from "../components/skbird-image"
 import { useLoadMoreSentinel } from "../components/use-load-more-sentinel"
 
-export function SkbirdMessagesPage({ navigate }: PluginPageProps) {
+export function SkbirdMessagesPage({ context, navigate }: PluginPageProps) {
   const { t } = useTranslation()
   const hasHydrated = useSkbirdStore((s) => s.hasHydrated)
   const token = useSkbirdStore((s) => s.token)
@@ -137,6 +137,7 @@ export function SkbirdMessagesPage({ navigate }: PluginPageProps) {
                 <CardContent className="flex gap-3 p-3">
                   {m.avatarUrl ? (
                     <SkbirdImage
+                      context={context}
                       url={skbirdImageUrl(m.avatarUrl, { w: 64, h: 64 })}
                       alt={m.nickname}
                       className="size-9 shrink-0 rounded-full object-cover"

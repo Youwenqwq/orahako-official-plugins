@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { BadgeCheck, Eye, MessageSquare, ThumbsUp } from "lucide-react"
+import type { PluginContext } from "@orahako/plugin-sdk"
 import { Badge } from "@orahako/plugin-ui/components"
 import { useTranslation } from "@orahako/plugin-ui/hooks"
 import { skbirdImageUrl } from "../client"
@@ -9,10 +10,12 @@ import { isCertThread, type SkbirdThread } from "../types"
 import { SkbirdImage } from "./skbird-image"
 
 export function SkbirdThreadCard({
+  context,
   thread,
   href,
   onOpen,
 }: {
+  context: PluginContext
   thread: SkbirdThread
   href: string
   onOpen?: () => void
@@ -27,6 +30,7 @@ export function SkbirdThreadCard({
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {thread.avatarUrl ? (
             <SkbirdImage
+              context={context}
               url={skbirdImageUrl(thread.avatarUrl, { w: 64, h: 64 })}
               alt={thread.nickname}
               className="size-5 shrink-0 rounded-full object-cover"
@@ -58,6 +62,7 @@ export function SkbirdThreadCard({
           <div className="flex gap-2">
             {thread.imgPaths.slice(0, 3).map((p) => (
               <SkbirdImage
+                context={context}
                 key={p}
                 url={skbirdImageUrl(p, { w: 200, h: 200 })}
                 alt=""

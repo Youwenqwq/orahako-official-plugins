@@ -1,6 +1,7 @@
 import { Bell, Bird, User } from "lucide-react"
-import { definePlugin, type PluginManifest } from "@orahako/plugin-sdk"
+import { definePlugin, PLUGIN_API_VERSION, type PluginManifest } from "@orahako/plugin-sdk"
 import { skbirdTranslations } from "./i18n"
+import { initSkbirdStore } from "./store"
 import { SkbirdIndexPage } from "./pages/index"
 import { SkbirdThreadPage } from "./pages/thread"
 import { SkbirdMessagesPage } from "./pages/messages"
@@ -12,13 +13,17 @@ export const manifest: PluginManifest = {
   id: "orahako.skbird",
   name: "森空鸟",
   version: "1.2.0",
-  apiVersion: 1,
+  apiVersion: PLUGIN_API_VERSION,
+  minAppVersion: "0.16.0",
   kind: "feature",
   categories: ["toybox"],
+  inject: ["ui", "i18n", "http", "storage", "native"],
+  nativeCapabilities: ["native.files@1"],
   entry: "index.js",
 }
 
 export const definition = definePlugin((ctx) => {
+  initSkbirdStore({ http: ctx.http, storage: ctx.storage.secure })
   ctx.i18n.register(skbirdTranslations)
 
   ctx.ui.registerNavigation({

@@ -14,23 +14,26 @@ marketplace metadata, and its releases are not public distribution.
   timestamps.
 - Marketplace metadata generation lives in the separate private
   `orahako-plugin-registry` repository.
-- There is no community crawler, topic bot, npm SDK publication, public plugin
-  template, or public development toolchain here.
+- The public SDK (`@orahako/plugin-sdk`), UI kit (`@orahako/plugin-ui`) and
+  plugin templates (`packages/plugin-template`, `packages/plugin-shell-template`)
+  live in the host repository. This repository only builds the
+  developer-maintained plugins against the pinned host checkout.
+- There is no community crawler, topic bot, or npm SDK publication.
 
 ## Plugins
 
 | Directory | Plugin id | Version | Kind |
 | --- | --- | --- | --- |
-| `plugins/perlica-toybox` | `community.perlica-toybox` | 1.2.0 | feature |
-| `plugins/skbird` | `orahako.skbird` | 1.1.0 | feature |
+| `plugins/perlica-toybox` | `community.perlica-toybox` | 1.3.0 | feature |
+| `plugins/skbird` | `orahako.skbird` | 1.2.0 | feature |
 | `plugins/theme-arknights` | `community.theme.arknights` | 1.0.1 | theme |
 | `plugins/theme-yuna` | `community.theme.yuna` | 1.0.1 | theme |
 | `plugins/zmu-provider` | `zmu.provider` | 1.0.0 | provider |
 
-The plugin sources and manifests were imported at host commit
-`f04980ef49f40c459c40dbfe8e0974fb22acbf27`. Versions already present in the
-public index are immutable; bump the manifest version instead of rebuilding or
-editing a released one.
+All manifests target API 2 (`apiVersion: 2`). API 1 ZIPs are intentionally
+incompatible with the current host and are rejected; published versions are
+immutable, so bump the manifest version instead of rebuilding or editing a
+released one.
 
 ## Layout
 
@@ -49,6 +52,65 @@ point at `toolchain/ysu-client`, so the existing host-integration tests run
 against the host surface that produced the current artifacts. Because the root
 workspace links `plugin-sdk` and `plugin-ui` from that submodule, update the
 submodule pin and refresh `pnpm-lock.yaml` together.
+
+Set `ORAHAKO_TOOLCHAIN` to an absolute path to run the build and tests against a
+different host checkout:
+
+```sh
+ORAHAKO_TOOLCHAIN=/home/me/ysu-client pnpm build
+ORAHAKO_TOOLCHAIN=/home/me/ysu-client pnpm test
+```
+
+`scripts/plugins.mjs` and `vitest.config.ts` both honor the override. The pnpm
+workspace still links SDK/UI packages from `toolchain/ysu-client`, so install
+dependencies in that checkout and keep the override's public SDK surface
+compatible with the pins; an override does not rewrite `pnpm-lock.yaml`.
+
+## Public plugin services
+
+Plugins consume the host only through public contracts:
+
+- `@orahako/plugin-sdk` subpaths: `runtime`, `composition`, `manifest`,
+  `academic`, `ui`, `slots`, `i18n`, `services`, `session`,
+  `provider-runtime`, `query`, `navigation`, `events`, `providers`,
+  `provider-base`, `provider-capabilities`, `provider-errors`,
+  `crypto`, `market`, `installer`, `http`, `kernel`, `mfa`.
+- `@orahako/plugin-ui` subpaths and `@orahako/academic` for shared UI and
+  academic components.
+- The scoped `PluginContext` services: `ui`, `slots`, `settings`,
+  `notifications`, `i18n`, `providers`, `session`, `provider`, `query`,
+  `navigation`, `plugins`, `storage`, `http` (including read-only
+  `http.activity`), `native` (versioned capabilities), `assets` and `mfa`.
+
+There is no `@orahako/plugin-sdk/host` entry point and no official-only private
+API. External packages may not import `@/` host modules; the host rejects bare
+imports outside its shared module table and resolves only package-relative
+imports inside a ZIP. An external package can declare `provides` in its manifest
+to expose a new root service to other plugins and `inject` to consume one;
+replacing a core service that the host composition already provides requires a
+host composition change, not a marketplace install. Notifications use open
+channel strings, network activity is read-only (no URLs), and native access is
+limited to capabilities compiled into the host.
+
+## Native capabilities
+
+Plugins that use Android capabilities declare them in `manifest.json`, for
+example:
+
+```json
+{
+  "nativeCapabilities": ["native.geolocation@1"]
+}
+```
+
+The host installs a package only when every declared capability is enabled by
+the app's build composition (`assets/native-companion.json`). A market release
+may also declare `nativeCapabilities`; the host filters releases whose declared
+capabilities are unavailable. A ZIP cannot add Kotlin code or Gradle modules: a
+new native capability requires a new host build with a companion module, a
+capability factory and a composition entry. Declaring a capability never grants
+permission by itself; call `ctx.native.capabilities.has()` and handle
+unavailable/denied results.
 
 ## Requirements
 
@@ -77,8 +139,8 @@ pnpm test        # one run
 pnpm test:watch  # watch mode
 ```
 
-Tests include the two host-integration cases that construct `PluginRuntime` and
-`ProviderPluginRegistry` through `@/` imports, plus the plugin-level unit tests.
+Tests include a host-integration case that constructs `PluginRuntime` and the UI
+registry through `@/` imports, plus the plugin-level unit tests.
 
 ## Build
 
@@ -92,6 +154,13 @@ write ZIPs to `artifacts/<plugin-id>-<version>.zip`. A full build clears
 `artifacts/` first; a targeted build leaves other artifacts alone. The plugin
 packer also writes each plugin's `dist/` directory next to its sources; both
 `artifacts/` and `plugins/*/dist/` are gitignored.
+
+The packer validates the manifest (`apiVersion` must be `2`), bundles the entry
+as ESM while externalizing host-shared modules, and, when the plugin uses
+Tailwind utilities, compiles them into `dist/tailwind.css` and appends it to the
+packaged `manifest.styles`. Styles are therefore owned by the plugin ZIP rather
+than the host stylesheet. It prints the ZIP path, byte size and SHA-256; the
+market index must record exactly that hash and size.
 
 Builds require the toolchain dependencies to be installed because the packer
 uses the host's esbuild, PostCSS, Tailwind, and manifest validator.

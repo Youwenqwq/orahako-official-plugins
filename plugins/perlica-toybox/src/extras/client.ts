@@ -1,4 +1,4 @@
-import { fetchStateless, type HttpResponse } from "@orahako/plugin-sdk/host"
+import type { HttpResponse, PluginHttpService } from "@orahako/plugin-sdk"
 import {
   toPerlicaCurrentOrder,
   toPerlicaGeoArea,
@@ -72,7 +72,10 @@ export class PerlicaError extends Error {
 export class PerlicaClient {
   private readonly adAccountId: string
 
-  constructor(private readonly config: PerlicaConfig) {
+  constructor(
+    private readonly http: PluginHttpService,
+    private readonly config: PerlicaConfig
+  ) {
     this.adAccountId = config.adAccountId?.trim() || DEFAULT_AD_ACCOUNT_ID
   }
 
@@ -82,7 +85,7 @@ export class PerlicaClient {
 
     let response: HttpResponse
     try {
-      response = await fetchStateless({
+      response = await this.http.send({
         method: "GET",
         url: `${BASE_URL}${path}?${query.toString()}`,
         redirect: "manual",

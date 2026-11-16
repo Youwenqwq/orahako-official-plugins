@@ -225,6 +225,9 @@ importers:
 
   toolchain/ysu-client/packages/plugin-sdk:
     dependencies:
+      '@capacitor/core':
+        specifier: ^8.3.4
+        version: 8.6.2
       '@cordisjs/core':
         specifier: 3.18.1
         version: 3.18.1
@@ -242,6 +245,9 @@ importers:
         version: 19.3.1
 
 packages:
+
+  '@capacitor/core@8.6.2':
+    resolution: {integrity: sha512-UEb9crRuqEAe2Iu2eGOEuQ8rLQxpwg7ZZIpl17UJoytEpnV1e4oXXW0K7yYS2NsCOGmJjyLeKjNlgG7tkAoX8g==}
 
   '@cordisjs/core@3.18.1':
     resolution: {integrity: sha512-yRuATOamFxeD1ztE2L3o1SaHuT2zw5DTXijQYxt9azVNeILbvtomfGG6sLZegrynJO9XZbNvXbOlQ7LBJDOlAg==}
@@ -751,6 +757,10 @@ packages:
 
 snapshots:
 
+  '@capacitor/core@8.6.2':
+    dependencies:
+      tslib: 2.9.1
+
   '@cordisjs/core@3.18.1':
     dependencies:
       cosmokit: 1.8.1
@@ -1058,8 +1068,7 @@ snapshots:
 
   tinyrainbow@3.2.0: {}
 
-  tslib@2.9.1:
-    optional: true
+  tslib@2.9.1: {}
 
   vite@8.3.8:
     dependencies:

@@ -12,11 +12,11 @@ import { useTranslation } from "@orahako/plugin-ui/hooks"
 import { SkbirdError, skbirdImageUrl, SKBIRD_ERRNO_TOKEN_INVALID } from "../client"
 import { getSkbirdClient } from "../store"
 import { isCertThread, mergeSkbirdThread, type SkbirdComment, type SkbirdThread } from "../types"
-import { readSkbirdFeedSnapshot } from "../feed-state"
+import { skbirdFeedState } from "../feed-state"
 import { SkbirdImage } from "../components/skbird-image"
 import { SkbirdCommentItem } from "../components/comment-item"
 
-export function SkbirdThreadPage({ params, navigate }: PluginPageProps) {
+export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps) {
   const { t } = useTranslation()
   const id = params.get("id")
 
@@ -36,7 +36,7 @@ export function SkbirdThreadPage({ params, navigate }: PluginPageProps) {
       setError(t("skbird.noToken"))
       return
     }
-    const cachedThread = readSkbirdFeedSnapshot()?.threads.find((item) => item.threadId === id)
+    const cachedThread = skbirdFeedState.read()?.threads.find((item) => item.threadId === id)
     let cancelled = false
     client
       .thread(id)
@@ -160,6 +160,7 @@ export function SkbirdThreadPage({ params, navigate }: PluginPageProps) {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {thread.avatarUrl ? (
             <SkbirdImage
+              context={context}
               url={skbirdImageUrl(thread.avatarUrl, { w: 64, h: 64 })}
               alt={thread.nickname}
               className="size-6 shrink-0 rounded-full object-cover"
@@ -197,6 +198,7 @@ export function SkbirdThreadPage({ params, navigate }: PluginPageProps) {
           <div className="flex flex-wrap gap-2">
             {display.imgPaths.map((p) => (
               <SkbirdImage
+                context={context}
                 key={p}
                 url={skbirdImageUrl(p, { w: 200, h: 200 })}
                 zoomUrl={skbirdImageUrl(p, "original")}
@@ -252,7 +254,12 @@ export function SkbirdThreadPage({ params, navigate }: PluginPageProps) {
         ) : (
           <div className="flex flex-col gap-5">
             {comments.map((c) => (
-              <SkbirdCommentItem key={c.commentId} comment={c} threadId={thread.threadId} />
+              <SkbirdCommentItem
+                context={context}
+                key={c.commentId}
+                comment={c}
+                threadId={thread.threadId}
+              />
             ))}
           </div>
         )}

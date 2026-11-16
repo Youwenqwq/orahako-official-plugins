@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url"
 
 export const ROOT = fileURLToPath(new URL("..", import.meta.url))
 export const PLUGINS_DIR = path.join(ROOT, "plugins")
-export const TOOLCHAIN_DIR = path.join(ROOT, "toolchain", "ysu-client")
+export const TOOLCHAIN_DIR = process.env.ORAHAKO_TOOLCHAIN
+  ? path.resolve(process.env.ORAHAKO_TOOLCHAIN)
+  : path.join(ROOT, "toolchain", "ysu-client")
 export const ARTIFACTS_DIR = path.join(ROOT, "artifacts")
 
 /**

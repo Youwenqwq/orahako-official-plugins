@@ -1,3 +1,4 @@
+import type { PluginKeyValueStorage } from "@orahako/plugin-sdk"
 import type {
   PerlicaCoords,
   PerlicaGeoArea,
@@ -8,11 +9,15 @@ import type {
   PerlicaUserInfo,
 } from "./types"
 
-const LEGACY_SNAPSHOT_KEY = "perlica-ui-snapshot-v2"
+/**
+ * Snapshot key prefix. The host already namespaces every plugin key, so the
+ * only remaining collision axis is the account inside this plugin.
+ */
+const SNAPSHOT_KEY_PREFIX = "snapshot"
 const SNAPSHOT_TTL = 12 * 60 * 60 * 1000
 
 function snapshotKey(accountId: string) {
-  return `${LEGACY_SNAPSHOT_KEY}:${encodeURIComponent(accountId)}`
+  return `${SNAPSHOT_KEY_PREFIX}:${encodeURIComponent(accountId)}`
 }
 
 export interface PerlicaSnapshot {
@@ -49,53 +54,93 @@ const EMPTY_SNAPSHOT: PerlicaSnapshot = {
   geoAreaAt: 0,
 }
 
-export function readPerlicaSnapshot(accountId: string): PerlicaSnapshot | null {
-  if (typeof window === "undefined") return null
-  const key = snapshotKey(accountId)
-  try {
-    const raw = window.localStorage.getItem(key)
-    if (!raw) return null
-    const value = JSON.parse(raw) as Partial<PerlicaSnapshot>
-    if (typeof value.savedAt !== "number" || Date.now() - value.savedAt > SNAPSHOT_TTL) {
-      window.localStorage.removeItem(key)
+/**
+ * Per-activation snapshot cache. Reads and writes go through the injected
+ * plugin storage (`ctx.storage.local`), which the host scopes to this plugin,
+ * so snapshots never touch host globals or another plugin's keys.
+ *
+ * The snapshot is a local-lifetime cache: it survives app restarts for
+ * `SNAPSHOT_TTL` and is dropped as soon as it goes stale. Writes are
+ * serialized per account so concurrent request results cannot lose earlier
+ * patches through a read-modify-write race.
+ */
+export interface PerlicaSnapshotCache {
+  read(accountId: string): Promise<PerlicaSnapshot | null>
+  write(accountId: string, patch: Partial<PerlicaSnapshot>): Promise<void>
+  clear(accountId: string): Promise<void>
+}
+
+function normalizeSnapshot(value: Partial<PerlicaSnapshot>): PerlicaSnapshot {
+  return {
+    ...EMPTY_SNAPSHOT,
+    ...value,
+    machines: Array.isArray(value.machines) ? value.machines : [],
+    logs: Array.isArray(value.logs) ? value.logs : [],
+    cards: Array.isArray(value.cards) ? value.cards : [],
+  }
+}
+
+function sanitizeSnapshot(snapshot: PerlicaSnapshot): string {
+  return JSON.stringify(snapshot, (key, value: unknown) => {
+    if (/token|authorization|cookie|credential|secret|password|session/i.test(key)) {
+      return undefined
+    }
+    if (typeof value === "string") return value.replace(/TOKEN:[^\s&?#]+/gi, "[redacted]")
+    return value
+  })
+}
+
+export function createPerlicaSnapshotCache(storage: PluginKeyValueStorage): PerlicaSnapshotCache {
+  const pending = new Map<string, Promise<unknown>>()
+
+  /** Runs storage work for one account strictly after earlier work finished. */
+  function enqueue<T>(accountId: string, task: () => Promise<T>): Promise<T> {
+    const previous = pending.get(accountId) ?? Promise.resolve()
+    const next = previous.then(task, task)
+    pending.set(accountId, next)
+    const settle = () => {
+      if (pending.get(accountId) === next) pending.delete(accountId)
+    }
+    void next.then(settle, settle)
+    return next
+  }
+
+  async function readNow(accountId: string): Promise<PerlicaSnapshot | null> {
+    const key = snapshotKey(accountId)
+    try {
+      const raw = await storage.getItem(key)
+      if (!raw) return null
+      const value = JSON.parse(raw) as Partial<PerlicaSnapshot>
+      if (typeof value.savedAt !== "number" || Date.now() - value.savedAt > SNAPSHOT_TTL) {
+        await storage.removeItem(key).catch(() => undefined)
+        return null
+      }
+      return normalizeSnapshot(value)
+    } catch {
       return null
     }
-    return {
-      ...EMPTY_SNAPSHOT,
-      ...value,
-      machines: Array.isArray(value.machines) ? value.machines : [],
-      logs: Array.isArray(value.logs) ? value.logs : [],
-      cards: Array.isArray(value.cards) ? value.cards : [],
+  }
+
+  async function writeNow(accountId: string, patch: Partial<PerlicaSnapshot>): Promise<void> {
+    try {
+      const previous = (await readNow(accountId)) ?? EMPTY_SNAPSHOT
+      const next = { ...previous, ...patch, savedAt: Date.now() }
+      await storage.setItem(snapshotKey(accountId), sanitizeSnapshot(next))
+    } catch {
+      // Storage denial must not block live requests.
     }
-  } catch {
-    return null
   }
-}
 
-export function writePerlicaSnapshot(accountId: string, patch: Partial<PerlicaSnapshot>) {
-  if (typeof window === "undefined") return
-  try {
-    const previous = readPerlicaSnapshot(accountId) ?? EMPTY_SNAPSHOT
-    const next = { ...previous, ...patch, savedAt: Date.now() }
-    const serialized = JSON.stringify(next, (key, value: unknown) => {
-      if (/token|authorization|cookie|credential|secret|password|session/i.test(key)) {
-        return undefined
-      }
-      if (typeof value === "string") return value.replace(/TOKEN:[^\s&?#]+/gi, "[redacted]")
-      return value
-    })
-    window.localStorage.setItem(snapshotKey(accountId), serialized ?? "{}")
-  } catch {
-    // Storage denial must not block live requests.
-  }
-}
-
-export function clearPerlicaSnapshot(accountId?: string) {
-  if (typeof window === "undefined") return
-  try {
-    window.localStorage.removeItem(LEGACY_SNAPSHOT_KEY)
-    if (accountId !== undefined) window.localStorage.removeItem(snapshotKey(accountId))
-  } catch {
-    // Storage denial needs no user-facing error.
+  return {
+    read: (accountId) => enqueue(accountId, () => readNow(accountId)),
+    write: (accountId, patch) => enqueue(accountId, () => writeNow(accountId, patch)),
+    clear: (accountId) =>
+      enqueue(accountId, async () => {
+        try {
+          await storage.removeItem(snapshotKey(accountId))
+        } catch {
+          // Storage denial needs no user-facing error.
+        }
+      }),
   }
 }

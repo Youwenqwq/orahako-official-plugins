@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { X } from "lucide-react"
 import { toast } from "sonner"
-import { fetchStateless, headerSingle } from "@orahako/plugin-sdk/host"
+import type { PluginContext } from "@orahako/plugin-sdk"
 import { Skeleton } from "@orahako/plugin-ui/components"
 import { Button } from "@orahako/plugin-ui/components"
 import {
@@ -17,8 +17,8 @@ import {
 } from "@orahako/plugin-ui/components"
 import { useTranslation } from "@orahako/plugin-ui/hooks"
 import { useBackLayer } from "@orahako/plugin-ui/hooks"
-import { isCapacitor } from "@orahako/plugin-ui/platform"
-import { OrahakoFile } from "@orahako/plugin-ui/platform"
+import { fetchImageBlob } from "../http"
+
 /** 关闭动画时长，与过渡类 duration 匹配 */
 const LIGHTBOX_TRANSITION_MS = 200
 
@@ -33,19 +33,6 @@ const TAP_SLOP_PX = 8
 /** 长按触发保存的延迟 */
 const LONG_PRESS_MS = 500
 
-/** Blob → 纯 base64（无 data: 前缀），分块拼接避免爆栈 */
-function blobToBase64(blob: Blob): Promise<string> {
-  return blob.arrayBuffer().then((buffer) => {
-    const bytes = new Uint8Array(buffer)
-    let binary = ""
-    const CHUNK = 0x8000
-    for (let i = 0; i < bytes.length; i += CHUNK) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
-    }
-    return btoa(binary)
-  })
-}
-
 /** 从 MIME 类型推导文件扩展名 */
 function extForMime(mime: string): string {
   const sub = mime.split("/")[1]?.toLowerCase() ?? ""
@@ -54,7 +41,17 @@ function extForMime(mime: string): string {
   return sub
 }
 
-function Lightbox({ url, alt, onClose }: { url: string; alt: string; onClose: () => void }) {
+function Lightbox({
+  context,
+  url,
+  alt,
+  onClose,
+}: {
+  context: PluginContext
+  url: string
+  alt: string
+  onClose: () => void
+}) {
   const { t } = useTranslation()
   const [entered, setEntered] = useState(false)
   const [closing, setClosing] = useState(false)
@@ -79,7 +76,7 @@ function Lightbox({ url, alt, onClose }: { url: string; alt: string; onClose: ()
   const longPressTimerRef = useRef<number | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [saveSheetOpen, setSaveSheetOpen] = useState(false)
-  const native = isCapacitor()
+  const native = context.native.isNative
 
   // 挂载后下一帧进入，触发开启过渡
   useEffect(() => {
@@ -182,7 +179,7 @@ function Lightbox({ url, alt, onClose }: { url: string; alt: string; onClose: ()
     }, LONG_PRESS_MS)
   }
 
-  /** 取当前展示图片的二进制：优先复用 object URL，退回 fetchStateless 拉取 */
+  /** 取当前展示图片的二进制：优先复用 object URL，退回宿主 HTTP 拉取 */
   async function loadDisplayedBlob(): Promise<Blob> {
     const img = wrapRef.current?.querySelector("img")
     const src = img?.currentSrc || img?.src
@@ -190,15 +187,7 @@ function Lightbox({ url, alt, onClose }: { url: string; alt: string; onClose: ()
       const blob = await (await fetch(src)).blob()
       if (blob.size > 0) return blob
     }
-    const res = await fetchStateless({
-      method: "GET",
-      url,
-      redirect: "manual",
-      responseType: "arraybuffer",
-    })
-    if (res.status !== 200) throw new Error(`HTTP ${res.status}`)
-    const type = headerSingle(res.headers, "content-type") ?? "image/jpeg"
-    return new Blob([await res.arrayBuffer()], { type })
+    return fetchImageBlob(context.http, url)
   }
 
   async function saveImage() {
@@ -206,11 +195,10 @@ function Lightbox({ url, alt, onClose }: { url: string; alt: string; onClose: ()
     setSaving(true)
     try {
       const blob = await loadDisplayedBlob()
-      await OrahakoFile.saveImageToGallery({
-        base64: await blobToBase64(blob),
-        mimeType: blob.type || "image/jpeg",
-        fileName: `skbird_${Date.now()}.${extForMime(blob.type || "image/jpeg")}`,
-      })
+      await context.native.saveImage(
+        blob,
+        `skbird_${Date.now()}.${extForMime(blob.type || "image/jpeg")}`
+      )
       toast.success(t("skbird.imageSaved"))
     } catch (err) {
       console.warn("[skbird] 保存图片失败:", err)
@@ -346,6 +334,7 @@ function Lightbox({ url, alt, onClose }: { url: string; alt: string; onClose: ()
           role="presentation"
         >
           <SkbirdImage
+            context={context}
             url={url}
             alt={alt}
             className={`max-h-[90vh] max-w-[92vw] object-contain transition-opacity duration-200 ${
@@ -404,7 +393,7 @@ function SaveSheet({
 }
 
 /**
- * 森空鸟 CDN 图片。双端统一走 fetchStateless 拉取后转 object URL：
+ * 森空鸟 CDN 图片。双端统一走 `ctx.http.send` 拉取后转 object URL：
  * - Native：WebView 默认拦截 https 页面加载 http 子资源（mixed content）。
  *
  * 例外：HTTPS 直链（如微信头像 thirdwx.qlogo.cn）无 mixed content 问题，
@@ -416,12 +405,14 @@ function SaveSheet({
  * zoomUrl 指定放大用的大图（未指定则复用当前 src，无额外请求）。
  */
 export function SkbirdImage({
+  context,
   url,
   alt,
   className,
   zoomable = false,
   zoomUrl,
 }: {
+  context: PluginContext
   url: string
   alt: string
   className?: string
@@ -439,18 +430,8 @@ export function SkbirdImage({
     let objectUrl: string | null = null
     setSrc(null)
     setFailed(false)
-    fetchStateless({
-      method: "GET",
-      url,
-      redirect: "manual",
-      // CapacitorHttp 的二进制响应类型是 arraybuffer，原生桥接返回 base64
-      // 字符串，再由 cookie.ts 的 arrayBuffer() 统一解码。
-      responseType: "arraybuffer",
-    })
-      .then(async (res) => {
-        if (res.status !== 200) throw new Error(`HTTP ${res.status}`)
-        const type = headerSingle(res.headers, "content-type") ?? "image/jpeg"
-        const blob = new Blob([await res.arrayBuffer()], { type })
+    fetchImageBlob(context.http, url)
+      .then((blob) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(blob)
         setSrc(objectUrl)
@@ -462,7 +443,7 @@ export function SkbirdImage({
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [url, direct])
+  }, [context.http, url, direct])
 
   if (!direct) {
     if (failed) return null
@@ -481,7 +462,12 @@ export function SkbirdImage({
         onClick={zoomable ? () => setZoomed(true) : undefined}
       />
       {zoomable && zoomed ? (
-        <Lightbox url={zoomUrl ?? url} alt={alt} onClose={() => setZoomed(false)} />
+        <Lightbox
+          context={context}
+          url={zoomUrl ?? url}
+          alt={alt}
+          onClose={() => setZoomed(false)}
+        />
       ) : null}
     </>
   )

@@ -1,18 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { HttpRequest, HttpResponse } from "@orahako/plugin-sdk/host"
-
-const sendMock = vi.fn<(req: HttpRequest) => Promise<HttpResponse>>()
-
-vi.mock("@orahako/plugin-sdk/host", () => ({
-  fetchStateless: (req: HttpRequest) => sendMock(req),
-}))
-
-import { PerlicaClient, PerlicaError } from "./client"
+import type { HttpRequest, HttpResponse, PluginHttpService } from "@orahako/plugin-sdk"
+import { PerlicaClient, PerlicaError, type PerlicaConfig } from "./client"
 import { toPerlicaRideDetail } from "./types"
 
 const TOKEN = "TOKEN:10001:20002:00000000-0000-4000-8000-000000000000"
 const CONFIG = { token: TOKEN, accountId: "10001" }
 const COORDS = { lat: 30.123, lng: 120.456 }
+
+const sendMock = vi.fn<(request: HttpRequest) => Promise<HttpResponse>>()
+
+const http: PluginHttpService = {
+  send: (request) => sendMock(request),
+  activity: {
+    getSnapshot: () => ({ active: [], history: [], session: null, revision: 0 }),
+    subscribe: () => () => {},
+    registerLabeler: () => () => {},
+  },
+}
+
+function newClient(config: PerlicaConfig = CONFIG): PerlicaClient {
+  return new PerlicaClient(http, config)
+}
 
 function okResponse(data: unknown): HttpResponse {
   return {
@@ -35,7 +43,7 @@ beforeEach(() => {
 describe("PerlicaClient request contract", () => {
   it("places authentication and user parameters in the URL query", async () => {
     sendMock.mockResolvedValue(okResponse({ rideCardDate: "2026-12-01" }))
-    await expect(new PerlicaClient(CONFIG).userInfo()).resolves.toMatchObject({
+    await expect(newClient().userInfo()).resolves.toMatchObject({
       rideCardDate: "2026-12-01",
     })
 
@@ -63,7 +71,7 @@ describe("PerlicaClient request contract", () => {
         },
       ])
     )
-    const client = new PerlicaClient({ ...CONFIG, adAccountId: "custom-ad" })
+    const client = newClient({ ...CONFIG, adAccountId: "custom-ad" })
     await client.nearMachines(COORDS)
 
     const url = capturedUrl()
@@ -105,7 +113,7 @@ describe("PerlicaClient request contract", () => {
           ])
         )
 
-      const machines = await new PerlicaClient(CONFIG).nearMachines(COORDS)
+      const machines = await newClient().nearMachines(COORDS)
       expect(machines.map((machine) => machine.userCode)).toEqual(["11111111", "22222222"])
       expect(machines[0]).toMatchObject({ machineNo: "888888888" })
       expect(machines[0]!.distance).toBeGreaterThan(0)
@@ -120,7 +128,7 @@ describe("PerlicaClient request contract", () => {
 
   it("uses rowCount/pageNO and unwraps ride-log records", async () => {
     sendMock.mockResolvedValue(okResponse({ records: [{ orderNo: 9, fee: "3.5" }] }))
-    await expect(new PerlicaClient(CONFIG).rideLogs(4, 50)).resolves.toMatchObject([
+    await expect(newClient().rideLogs(4, 50)).resolves.toMatchObject([
       { orderNo: "9", fee: 3.5 },
     ])
     const url = capturedUrl()
@@ -149,7 +157,7 @@ describe("PerlicaClient request contract", () => {
         ],
       })
     )
-    const cards = await new PerlicaClient(CONFIG).rideCards(COORDS, 2, 30)
+    const cards = await newClient().rideCards(COORDS, 2, 30)
     expect(cards).toHaveLength(1)
     expect(cards[0]).toMatchObject({
       name: "Monthly",
@@ -172,7 +180,7 @@ describe("PerlicaClient request contract", () => {
   })
 
   it("normalizes direct arrays for nearby vehicles and the current order", async () => {
-    const client = new PerlicaClient(CONFIG)
+    const client = newClient()
     sendMock.mockResolvedValueOnce(
       okResponse([
         {
@@ -210,12 +218,12 @@ describe("PerlicaClient request contract", () => {
     "maps an empty current-order response %# to null",
     async (data) => {
       sendMock.mockResolvedValue(okResponse(data))
-      await expect(new PerlicaClient(CONFIG).currentOrder()).resolves.toBeNull()
+      await expect(newClient().currentOrder()).resolves.toBeNull()
     }
   )
 
   it("sends exact vehicle status, fee, and basic borrow parameters", async () => {
-    const client = new PerlicaClient(CONFIG)
+    const client = newClient()
     sendMock.mockResolvedValue(okResponse({}))
 
     await client.machineStatus("12345678")
@@ -240,7 +248,7 @@ describe("PerlicaClient request contract", () => {
 
   it("normalizes the service base ride fee from cents", async () => {
     sendMock.mockResolvedValue(okResponse({ baseTime: 20, baseTimeFee: 150, overTimeFee: 100 }))
-    await expect(new PerlicaClient(CONFIG).machineFee("12345678")).resolves.toMatchObject({
+    await expect(newClient().machineFee("12345678")).resolves.toMatchObject({
       fee: 1.5,
       price: 1.5,
       raw: { baseTime: 20 },
@@ -248,7 +256,7 @@ describe("PerlicaClient request contract", () => {
   })
 
   it("prepares a vehicle in order and only sends a nonempty borrowPosLogId", async () => {
-    const client = new PerlicaClient(CONFIG)
+    const client = newClient()
     sendMock
       .mockResolvedValueOnce(okResponse({}))
       .mockResolvedValueOnce(okResponse({}))
@@ -291,7 +299,7 @@ describe("PerlicaClient request contract", () => {
 
   it("sends the complete ringing query with both vehicle identifiers", async () => {
     sendMock.mockResolvedValue(okResponse({}))
-    await new PerlicaClient(CONFIG).ring("12345678", "123456789", COORDS)
+    await newClient().ring("12345678", "123456789", COORDS)
     const url = capturedUrl()
     expect(url.pathname).toBe("/terControl/sendControl.do")
     expect(Object.fromEntries(url.searchParams)).toEqual({
@@ -307,7 +315,7 @@ describe("PerlicaClient request contract", () => {
   })
 
   it("keeps return-check and return calls in order", async () => {
-    const client = new PerlicaClient(CONFIG)
+    const client = newClient()
     sendMock
       .mockResolvedValueOnce(okResponse({ allowed: true }))
       .mockResolvedValueOnce(okResponse({}))
@@ -338,7 +346,7 @@ describe("PerlicaClient request contract", () => {
         text: async () => JSON.stringify({ ret: 0, data: null, msg: "Unsupported" }),
       })
       .mockResolvedValue(okResponse({}))
-    const client = new PerlicaClient(CONFIG)
+    const client = newClient()
     await client.parkRide("ORDER-9", "12345678", COORDS)
     await client.continueRide("ORDER-9", "12345678", COORDS)
 
@@ -371,7 +379,7 @@ describe("PerlicaClient request contract", () => {
     sendMock.mockResolvedValue(
       okResponse({ records: [{ id: 1, name: "Lot", lat: "30.1", lon: "120.2" }] })
     )
-    const points = await new PerlicaClient(CONFIG).parkPoints(COORDS, 6000)
+    const points = await newClient().parkPoints(COORDS, 6000)
     expect(points).toMatchObject([{ id: "1", name: "Lot", lat: 30.1, lng: 120.2 }])
     expect(Object.fromEntries(capturedUrl().searchParams)).toEqual({
       token: TOKEN,
@@ -395,7 +403,7 @@ describe("PerlicaClient request contract", () => {
         stopTime: "20",
       })
     )
-    await expect(new PerlicaClient(CONFIG).geoArea(COORDS)).resolves.toMatchObject({
+    await expect(newClient().geoArea(COORDS)).resolves.toMatchObject({
       pointList: [{ x: 120.1, y: 30.1 }],
       centerLat: 30.2,
       centerLng: 120.2,
@@ -432,7 +440,7 @@ describe("PerlicaClient request contract", () => {
         returnTime: "2026-11-01 10:10:00",
       })
     )
-    const detail = await new PerlicaClient(CONFIG).rideDetail("ORDER-9")
+    const detail = await newClient().rideDetail("ORDER-9")
     expect(detail).toMatchObject({
       orderNo: "9",
       userCode: "12345678",
@@ -467,7 +475,7 @@ describe("PerlicaClient request contract", () => {
       orderStartTime: "2030-01-01 08:00:00",
       orderEndTime: "2030-01-01 08:12:19",
     })
-    await expect(new PerlicaClient(CONFIG).rideRoute(detail)).resolves.toEqual([
+    await expect(newClient().rideRoute(detail)).resolves.toEqual([
       { lat: 30.0001, lng: 120.0001 },
       { lat: 30.0002, lng: 120.0002 },
     ])
@@ -496,7 +504,7 @@ describe("PerlicaClient request contract", () => {
         ],
       })
     )
-    const stations = await new PerlicaClient(CONFIG).stations(COORDS)
+    const stations = await newClient().stations(COORDS)
     expect(stations).toMatchObject([
       { id: "station-1", name: "Central", accountId: "10001", lat: 30.1, lng: 120.1 },
     ])
@@ -510,7 +518,7 @@ describe("PerlicaClient request contract", () => {
   })
 
   it("normalizes remand points and unread counts", async () => {
-    const client = new PerlicaClient(CONFIG)
+    const client = newClient()
     sendMock.mockResolvedValueOnce(
       okResponse([{ remandId: 7, pointName: "Remand", x: "120.1", y: "30.1" }])
     )
@@ -531,14 +539,14 @@ describe("PerlicaClient errors", () => {
       ...okResponse(null),
       text: async () => JSON.stringify({ ret: 403, data: null, msg: "Operation denied" }),
     })
-    const error = await new PerlicaClient(CONFIG).userInfo().catch((e: unknown) => e)
+    const error = await newClient().userInfo().catch((e: unknown) => e)
     expect(error).toBeInstanceOf(PerlicaError)
     expect(error).toMatchObject({ ret: 403, message: "Operation denied" })
   })
 
   it("reports HTTP failures without exposing the request URL or token", async () => {
     sendMock.mockResolvedValue({ ...okResponse(null), status: 503 })
-    const error = await new PerlicaClient(CONFIG).userInfo().catch((e: unknown) => e)
+    const error = await newClient().userInfo().catch((e: unknown) => e)
     expect(error).toMatchObject({ ret: -1, message: "HTTP 503" })
     expect((error as Error).message).not.toContain(TOKEN)
     expect((error as Error).message).not.toContain("client3.uqbike.cn")
@@ -547,7 +555,7 @@ describe("PerlicaClient errors", () => {
   it("sanitizes transport errors that contain the complete authenticated URL", async () => {
     const authenticatedUrl = `https://client3.uqbike.cn/user/getByUserId.do?token=${encodeURIComponent(TOKEN)}`
     sendMock.mockRejectedValue(new Error(`fetch failed: ${authenticatedUrl}`))
-    const error = await new PerlicaClient(CONFIG).userInfo().catch((e: unknown) => e)
+    const error = await newClient().userInfo().catch((e: unknown) => e)
     expect(error).toBeInstanceOf(PerlicaError)
     expect(error).toMatchObject({ ret: -1, message: "Network request failed" })
     expect((error as Error).message).not.toContain(TOKEN)
