@@ -1,26 +1,49 @@
-"use client"
-
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import type { PluginPageProps } from "@orahako/plugin-sdk"
-import { Button } from "@orahako/plugin-ui/components"
+import type {
+  DerivedComponentProps,
+  ObservableSource,
+  SlotComponent,
+} from "@orahako/sdk"
 import {
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@orahako/plugin-ui/components"
-import { Input } from "@orahako/plugin-ui/components"
-import { Textarea } from "@orahako/plugin-ui/components"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@orahako/plugin-ui/components"
-import { useTranslation } from "@orahako/plugin-ui/hooks"
-import { SkbirdClient, generateDeviceId } from "../client"
-import { useSkbirdStore } from "../store"
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  Input,
+  Textarea,
+} from "@orahako/ui-primitives"
+import { SkbirdClient, type SkbirdConfig, generateDeviceId } from "../client"
+import type { SkbirdDictionary } from "../i18n"
+import type { SkbirdConfigStoreInstance } from "../store"
 
-export function SkbirdSettingsPage({ context }: PluginPageProps) {
-  const { t } = useTranslation()
-  const { token, deviceId, alias, hasHydrated, setConfig } = useSkbirdStore((s) => s)
+export interface SkbirdSettingsInject {
+  readonly hooks: {
+    readonly hydrated: ObservableSource<boolean>
+  }
+  readonly createClient: (config: SkbirdConfig) => SkbirdClient
+}
+
+export type SkbirdSettingsPageProps = DerivedComponentProps<
+  Record<string, never>,
+  SkbirdDictionary,
+  undefined,
+  SkbirdConfigStoreInstance,
+  SkbirdSettingsInject
+>
+
+export const SkbirdSettingsPage: SlotComponent<SkbirdSettingsPageProps> = (props) => {
+  const { t, useStore, actions, useHydrated, createClient } = props
+  const token = useStore((state) => state.token)
+  const deviceId = useStore((state) => state.deviceId)
+  const alias = useStore((state) => state.alias)
+  const hasHydrated = useHydrated()
 
   const [tokenInput, setTokenInput] = useState("")
   const [deviceIdInput, setDeviceIdInput] = useState("")
@@ -35,14 +58,14 @@ export function SkbirdSettingsPage({ context }: PluginPageProps) {
   }, [hasHydrated, token, deviceId, alias])
 
   function handleSave() {
-    setConfig({ token: tokenInput, deviceId: deviceIdInput, alias: aliasInput })
+    actions.setConfig({ token: tokenInput, deviceId: deviceIdInput, alias: aliasInput })
     toast.success(t("skbird.saved"))
   }
 
   async function handleTest() {
     setTesting(true)
     try {
-      const client = new SkbirdClient(context.http, {
+      const client = createClient({
         token: tokenInput.trim(),
         deviceId: deviceIdInput.trim() || generateDeviceId(),
         alias: aliasInput.trim() || "ysu",

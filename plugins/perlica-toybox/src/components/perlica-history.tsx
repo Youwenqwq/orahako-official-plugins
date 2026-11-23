@@ -3,25 +3,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { ChevronRight, CircleAlert, Flag, History, MapPin, Route } from "lucide-react"
-import { Badge } from "@orahako/plugin-ui/components"
-import { Button } from "@orahako/plugin-ui/components"
 import {
+  Badge,
+  Button,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
   ResponsiveModal,
   ResponsiveModalBody,
   ResponsiveModalContent,
   ResponsiveModalDescription,
   ResponsiveModalHeader,
   ResponsiveModalTitle,
-} from "@orahako/plugin-ui/components"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@orahako/plugin-ui/components"
-import { Skeleton } from "@orahako/plugin-ui/components"
-import { Spinner } from "@orahako/plugin-ui/components"
+  Skeleton,
+  Spinner,
+} from "@orahako/ui-primitives"
 import { PerlicaRouteMap } from "./perlica-route-map"
 import type { PerlicaClient } from "../extras/client"
 import type {
@@ -31,8 +29,7 @@ import type {
   PerlicaRideDetail,
   PerlicaRideLog,
 } from "../extras/types"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
-import { PERLICA_PLUGIN_ID } from "../constants"
+import type { PerlicaTranslator } from "../i18n"
 
 export interface PerlicaHistoryProps {
   client: PerlicaClient
@@ -42,6 +39,8 @@ export interface PerlicaHistoryProps {
   hasMore: boolean
   onLoadMore: () => void
   reportError: (error: unknown) => void
+  t: PerlicaTranslator
+  locale: string
 }
 
 function cleanText(value: unknown): string {
@@ -145,8 +144,9 @@ export function PerlicaHistory({
   hasMore,
   onLoadMore,
   reportError,
+  t,
+  locale,
 }: PerlicaHistoryProps) {
-  const { t, locale } = usePluginTranslation(PERLICA_PLUGIN_ID)
   const requestRef = useRef(0)
   const [selected, setSelected] = useState<PerlicaRideLog | null>(null)
   const [detail, setDetail] = useState<PerlicaRideDetail | null>(null)
@@ -444,6 +444,7 @@ export function PerlicaHistory({
                     end={end}
                     startName={detailStartName || undefined}
                     endName={detailEndName || undefined}
+                    t={t}
                   />
                 </section>
 

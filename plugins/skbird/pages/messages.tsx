@@ -1,26 +1,55 @@
-"use client"
-
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { PluginPageProps } from "@orahako/plugin-sdk"
-import { Button } from "@orahako/plugin-ui/components"
-import { Card, CardContent } from "@orahako/plugin-ui/components"
-import { Skeleton } from "@orahako/plugin-ui/components"
-import { Empty, EmptyHeader, EmptyTitle } from "@orahako/plugin-ui/components"
-import { useTranslation } from "@orahako/plugin-ui/hooks"
-import { SkbirdError, skbirdImageUrl, SKBIRD_ERRNO_TOKEN_INVALID } from "../client"
-import { getSkbirdClient, useSkbirdStore } from "../store"
+import type {
+  DerivedComponentProps,
+  ObservableSource,
+  SlotComponent,
+} from "@orahako/sdk"
+import {
+  Button,
+  Card,
+  CardContent,
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  Skeleton,
+} from "@orahako/ui-primitives"
+import {
+  SKBIRD_ERRNO_TOKEN_INVALID,
+  SkbirdError,
+  skbirdImageUrl,
+  type SkbirdClient,
+} from "../client"
+import type { SkbirdDictionary } from "../i18n"
+import type { SkbirdConfigStoreInstance } from "../store"
 import type { SkbirdMessage, SkbirdUnread } from "../types"
-import { SkbirdImage } from "../components/skbird-image"
+import { SkbirdImage, type SkbirdMediaAccess } from "../components/skbird-image"
 import { useLoadMoreSentinel } from "../components/use-load-more-sentinel"
 
-export function SkbirdMessagesPage({ context, navigate }: PluginPageProps) {
-  const { t } = useTranslation()
-  const hasHydrated = useSkbirdStore((s) => s.hasHydrated)
-  const token = useSkbirdStore((s) => s.token)
-  const setUnreadCount = useSkbirdStore((s) => s.setUnreadCount)
+export interface SkbirdMessagesInject {
+  readonly hooks: {
+    readonly hydrated: ObservableSource<boolean>
+  }
+  readonly getClient: () => SkbirdClient | null
+  readonly media: SkbirdMediaAccess
+  readonly setUnread: (count: number) => void
+  readonly openSettings: () => void
+}
+
+export type SkbirdMessagesPageProps = DerivedComponentProps<
+  Record<string, never>,
+  SkbirdDictionary,
+  undefined,
+  SkbirdConfigStoreInstance,
+  SkbirdMessagesInject
+>
+
+export const SkbirdMessagesPage: SlotComponent<SkbirdMessagesPageProps> = (props) => {
+  const { t, useStore, useHydrated, getClient, media, setUnread, openSettings } = props
+  const token = useStore((state) => state.token)
+  const hasHydrated = useHydrated()
 
   const [messages, setMessages] = useState<SkbirdMessage[]>([])
-  const [unread, setUnread] = useState<SkbirdUnread | null>(null)
+  const [unread, setUnreadState] = useState<SkbirdUnread | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
@@ -30,7 +59,7 @@ export function SkbirdMessagesPage({ context, navigate }: PluginPageProps) {
 
   const load = useCallback(
     async (append: boolean) => {
-      const client = getSkbirdClient()
+      const client = getClient()
       if (!client || busyRef.current) return
       busyRef.current = true
       if (append) setLoadingMore(true)
@@ -55,23 +84,23 @@ export function SkbirdMessagesPage({ context, navigate }: PluginPageProps) {
         busyRef.current = false
       }
     },
-    [t]
+    [t, getClient]
   )
 
   const sentinelRef = useLoadMoreSentinel(() => void load(true), hasMore && !loading && !error)
 
   useEffect(() => {
-    const client = getSkbirdClient()
+    const client = getClient()
     if (!hasHydrated || !client) return
     void load(false)
     client
       .unreadNum()
       .then((value) => {
-        setUnread(value)
-        setUnreadCount(value.count + value.imCount)
+        setUnreadState(value)
+        setUnread(value.count + value.imCount)
       })
       .catch(() => {})
-  }, [hasHydrated, token, load, setUnreadCount])
+  }, [hasHydrated, token, load, setUnread, getClient])
 
   if (hasHydrated && !token) {
     return (
@@ -80,7 +109,7 @@ export function SkbirdMessagesPage({ context, navigate }: PluginPageProps) {
           <EmptyHeader>
             <EmptyTitle>{t("skbird.noToken")}</EmptyTitle>
           </EmptyHeader>
-          <Button onClick={() => navigate("settings")}>{t("skbird.goSettings")}</Button>
+          <Button onClick={() => openSettings()}>{t("skbird.goSettings")}</Button>
         </Empty>
       </div>
     )
@@ -137,7 +166,8 @@ export function SkbirdMessagesPage({ context, navigate }: PluginPageProps) {
                 <CardContent className="flex gap-3 p-3">
                   {m.avatarUrl ? (
                     <SkbirdImage
-                      context={context}
+                      media={media}
+                      t={t}
                       url={skbirdImageUrl(m.avatarUrl, { w: 64, h: 64 })}
                       alt={m.nickname}
                       className="size-9 shrink-0 rounded-full object-cover"

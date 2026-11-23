@@ -4,7 +4,7 @@
  * 传输、代理与原生解码全部由 `ctx.http.send` 负责；这里只处理插件自己的
  * 图片响应形态。
  */
-import type { PluginHttpService } from "@orahako/plugin-sdk"
+import type { PluginHttpService } from "@orahako/sdk"
 
 const DEFAULT_IMAGE_TYPE = "image/jpeg"
 

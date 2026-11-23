@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Bike, CheckCircle2, Clock3, MapPin, Pause, Play, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
-import { Badge } from "@orahako/plugin-ui/components"
-import { Button } from "@orahako/plugin-ui/components"
-import { Card, CardContent } from "@orahako/plugin-ui/components"
 import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
   ResponsiveModal,
   ResponsiveModalBody,
   ResponsiveModalContent,
@@ -14,7 +15,7 @@ import {
   ResponsiveModalFooter,
   ResponsiveModalHeader,
   ResponsiveModalTitle,
-} from "@orahako/plugin-ui/components"
+} from "@orahako/ui-primitives"
 import type { PerlicaClient } from "../extras/client"
 import {
   estimateReturnFare,
@@ -24,8 +25,7 @@ import {
 } from "../extras/fare"
 import { PARK_POINT_SEARCH_RADIUS_METERS, selectParkingPoints } from "../extras/parking"
 import type { PerlicaCoords, PerlicaOrder, PerlicaParkPoint } from "../extras/types"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
-import { PERLICA_PLUGIN_ID } from "../constants"
+import type { PerlicaTranslator } from "../i18n"
 
 const VISIBLE_POLL_MS = 8_000
 const RETURN_RECHECK_DELAY_MS = 450
@@ -56,6 +56,7 @@ export interface PerlicaActiveRideProps {
   onOrderChange: (order: PerlicaOrder | null) => void
   onRequestLocation: () => Promise<PerlicaCoords | null>
   reportError: (error: unknown) => void
+  t: PerlicaTranslator
 }
 
 function orderKey(order: PerlicaOrder): string {
@@ -155,7 +156,7 @@ function delay(ms: number): Promise<void> {
   return promise
 }
 
-function actionMessage(action: ActionState | null, t: (key: string) => string): string | null {
+function actionMessage(action: ActionState | null, t: PerlicaTranslator): string | null {
   if (!action) return null
   if (action.step === "location") return t("perlica.activeRideLocating")
   if (action.step === "check") return t("perlica.activeRideCheckingReturn")
@@ -172,8 +173,8 @@ export function PerlicaActiveRide({
   onOrderChange,
   onRequestLocation,
   reportError,
+  t,
 }: PerlicaActiveRideProps) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
   const [now, setNow] = useState(() => Date.now())
   const [action, setAction] = useState<ActionState | null>(null)
   const [returnCandidate, setReturnCandidate] = useState<ReturnCandidate | null>(null)

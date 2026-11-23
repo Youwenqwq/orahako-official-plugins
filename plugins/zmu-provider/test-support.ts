@@ -1,15 +1,13 @@
+import type { CookieEntry, HttpRequest, HttpResponse } from "@orahako/sdk"
 import type {
-  CookieEntry,
   CookieJar,
   CredentialInput,
-  HttpRequest,
-  HttpResponse,
-  PluginSessionService,
+  SessionService,
   SessionSnapshot,
-} from "@orahako/plugin-sdk"
+} from "@orahako/academic-sdk"
 
 export type ZMUTestSession = Pick<
-  PluginSessionService,
+  SessionService,
   | "getSnapshot"
   | "setCredential"
   | "clearCredential"

@@ -1,42 +1,44 @@
-"use client"
-
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
-import Link from "next/link"
-import { Bird, Search, Settings, User, Bell, X } from "lucide-react"
-import { pluginPageHref, type PluginPageProps } from "@orahako/plugin-sdk"
-import { cn } from "@orahako/plugin-ui/components"
-import { Badge } from "@orahako/plugin-ui/components"
-import { Button } from "@orahako/plugin-ui/components"
-import { Input } from "@orahako/plugin-ui/components"
-import { Skeleton } from "@orahako/plugin-ui/components"
-import { Tabs, TabsList, TabsTrigger } from "@orahako/plugin-ui/components"
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react"
+import { Bell, Bird, Search, Settings, User, X } from "lucide-react"
+import type {
+  DerivedComponentProps,
+  ObservableSource,
+  SlotComponent,
+} from "@orahako/sdk"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@orahako/plugin-ui/components"
-import {
+  Badge,
+  Button,
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@orahako/plugin-ui/components"
-import { useTranslation } from "@orahako/plugin-ui/hooks"
-import { useBackHandler } from "@orahako/plugin-ui/hooks"
-import { useMobileHeaderRight } from "@orahako/plugin-ui/stores"
-import { SkbirdError, SKBIRD_ERRNO_TOKEN_INVALID } from "../client"
-import { getSkbirdClient, useSkbirdStore, useSkbirdUnreadCount } from "../store"
-import type { SkbirdCategory, SkbirdThread } from "../types"
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Skeleton,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  cn,
+  useBackHandler,
+  useIsMobile,
+} from "@orahako/ui-primitives"
 import {
-  skbirdFeedState,
-  type SkbirdFeedSnapshot,
-  type SkbirdFeedTab,
-} from "../feed-state"
+  SKBIRD_ERRNO_TOKEN_INVALID,
+  SkbirdError,
+  type SkbirdClient,
+} from "../client"
+import type { SkbirdDictionary } from "../i18n"
+import type { SkbirdConfigStoreInstance } from "../store"
+import type { SkbirdCategory, SkbirdThread } from "../types"
+import { type SkbirdFeedSnapshot, type SkbirdFeedTab } from "../feed-state"
 import { SkbirdThreadCard } from "../components/thread-card"
 import { useLoadMoreSentinel } from "../components/use-load-more-sentinel"
+import type { SkbirdMediaAccess } from "../components/skbird-image"
 
 type FeedTab = SkbirdFeedTab
 /** 时间游标分页的 tab（from_time = 末条 postTime） */
@@ -54,10 +56,46 @@ const SEARCH_RANGES = [
   { value: "2y", labelKey: "skbird.range2y" },
 ] as const
 
-export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps) {
-  const { t } = useTranslation()
-  const token = useSkbirdStore((s) => s.token)
-  const hasHydrated = useSkbirdStore((s) => s.hasHydrated)
+export interface SkbirdIndexInject {
+  readonly hooks: {
+    readonly hydrated: ObservableSource<boolean>
+    readonly unread: ObservableSource<number>
+  }
+  readonly getClient: () => SkbirdClient | null
+  readonly media: SkbirdMediaAccess
+  readonly pageHref: (page: string, params?: Record<string, string>) => string
+  readonly openPage: (page: string, params?: Record<string, string>) => void
+  readonly readFeedState: () => SkbirdFeedSnapshot | null
+  readonly writeFeedState: (snapshot: SkbirdFeedSnapshot) => void
+  readonly refreshUnread: () => Promise<void>
+}
+
+export type SkbirdIndexPageProps = DerivedComponentProps<
+  Record<string, never>,
+  SkbirdDictionary,
+  undefined,
+  SkbirdConfigStoreInstance,
+  SkbirdIndexInject
+>
+
+export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
+  const {
+    t,
+    useStore,
+    useHydrated,
+    useUnread,
+    getClient,
+    media,
+    pageHref,
+    openPage,
+    readFeedState,
+    writeFeedState,
+    refreshUnread,
+  } = props
+  const token = useStore((state) => state.token)
+  const hasHydrated = useHydrated()
+  const unread = useUnread()
+  const isMobile = useIsMobile()
 
   const [tab, setTab] = useState<FeedTab>("hot")
   const [wd, setWd] = useState("")
@@ -69,19 +107,9 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const unread = useSkbirdUnreadCount()
   const [range, setRange] = useState("all")
   const [searchOpen, setSearchOpen] = useState(false)
-  const mobileSearch = useSyncExternalStore(
-    (callback) => {
-      const query = window.matchMedia("(width < 640px)")
-      query.addEventListener("change", callback)
-      return () => query.removeEventListener("change", callback)
-    },
-    () => window.matchMedia("(width < 640px)").matches,
-    () => false
-  )
-  useBackHandler(() => setSearchOpen(false), mobileSearch && searchOpen)
+  useBackHandler(() => setSearchOpen(false), isMobile && searchOpen)
   const cursorRef = useRef("0")
   const searchPageRef = useRef(1)
   const busyRef = useRef(false)
@@ -116,7 +144,7 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
     }
     persistRef.current = () => {
       if (!hasHydrated || !token || !initializedRef.current || !feedStateRef.current) return
-      skbirdFeedState.write({
+      writeFeedState({
         ...feedStateRef.current,
         cursor: cursorRef.current,
         searchPage: searchPageRef.current,
@@ -124,7 +152,19 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
         mainScrollTop: scrollRef.current.mainScrollTop,
       })
     }
-  }, [hasHydrated, token, tab, wd, submittedWd, cateId, range, searchOpen, threads, hasMore])
+  }, [
+    hasHydrated,
+    token,
+    tab,
+    wd,
+    submittedWd,
+    cateId,
+    range,
+    searchOpen,
+    threads,
+    hasMore,
+    writeFeedState,
+  ])
 
   const captureScrollBeforeNavigation = useCallback(() => {
     navigationScrollCapturedRef.current = true
@@ -159,7 +199,7 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
   useEffect(() => {
     if (!hasHydrated || !token || initializedRef.current) return
     initializedRef.current = true
-    const snapshot = skbirdFeedState.read()
+    const snapshot = readFeedState()
     if (snapshot) {
       restoredRef.current = true
       snapshotAvailableRef.current = true
@@ -179,7 +219,7 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
       setHasMore(snapshot.hasMore)
     }
     setFeedStateReady(true)
-  }, [hasHydrated, token])
+  }, [hasHydrated, token, readFeedState])
 
   useEffect(() => {
     if (
@@ -240,7 +280,7 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
 
   const fetchPage = useCallback(
     async (append: boolean): Promise<void> => {
-      const client = getSkbirdClient()
+      const client = getClient()
       if (!client || busyRef.current) return
       busyRef.current = true
       if (append) setLoadingMore(true)
@@ -277,7 +317,7 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
         busyRef.current = false
       }
     },
-    [tab, cateId, submittedWd, range, mapError]
+    [tab, cateId, submittedWd, range, mapError, getClient]
   )
 
   // 首屏加载；若存在详情页返回快照，则直接使用快照，条件变化仍按原逻辑重新加载。
@@ -294,13 +334,19 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
 
   // 分类列表：进入页面后拉取一次，失败静默
   useEffect(() => {
-    const client = getSkbirdClient()
+    const client = getClient()
     if (!hasHydrated || !client) return
     client
       .categories()
       .then(setCategories)
       .catch(() => {})
-  }, [hasHydrated, token])
+  }, [hasHydrated, token, getClient])
+
+  // 与旧实现一致：每次回到列表页刷新一次未读数（插件激活时也会刷新）。
+  useEffect(() => {
+    if (!hasHydrated || !token) return
+    void refreshUnread()
+  }, [hasHydrated, token, refreshUnread])
 
   const canLoadMore = ((CURSOR_TABS[tab] && !submittedWd) || !!submittedWd) && hasMore
   const sentinelRef = useLoadMoreSentinel(
@@ -308,13 +354,22 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
     canLoadMore && !loading && !error
   )
 
-  useMobileHeaderRight(
-    <Button asChild size="icon-sm" variant="ghost" aria-label={t("skbird.settingsTitle")}>
-      <Link href={pluginPageHref(pluginId, "settings")}>
-        <Settings className="size-4" />
-      </Link>
-    </Button>,
-    [pluginId, t]
+  const handleLinkClick = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>, page: string, params?: Record<string, string>) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return
+      }
+      event.preventDefault()
+      openPage(page, params)
+    },
+    [openPage]
   )
 
   if (hasHydrated && !token) {
@@ -328,7 +383,7 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
             <EmptyTitle>{t("skbird.noToken")}</EmptyTitle>
             <EmptyDescription>{t("skbird.noTokenHint")}</EmptyDescription>
           </EmptyHeader>
-          <Button onClick={() => navigate("settings")}>{t("skbird.goSettings")}</Button>
+          <Button onClick={() => openPage("settings")}>{t("skbird.goSettings")}</Button>
         </Empty>
       </div>
     )
@@ -444,22 +499,25 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
             aria-label={t("skbird.messagesTitle")}
             className="relative"
           >
-            <Link href={pluginPageHref(pluginId, "messages")}>
+            <a
+              href={pageHref("messages")}
+              onClick={(event) => handleLinkClick(event, "messages")}
+            >
               <Bell className="size-4" />
               {unread > 0 ? (
                 <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-destructive" />
               ) : null}
-            </Link>
+            </a>
           </Button>
           <Button asChild size="icon" variant="ghost" aria-label={t("skbird.meTitle")}>
-            <Link href={pluginPageHref(pluginId, "me")}>
+            <a href={pageHref("me")} onClick={(event) => handleLinkClick(event, "me")}>
               <User className="size-4" />
-            </Link>
+            </a>
           </Button>
           <Button asChild size="icon" variant="ghost" aria-label={t("skbird.settingsTitle")}>
-            <Link href={pluginPageHref(pluginId, "settings")}>
+            <a href={pageHref("settings")} onClick={(event) => handleLinkClick(event, "settings")}>
               <Settings className="size-4" />
-            </Link>
+            </a>
           </Button>
         </div>
       </div>
@@ -492,7 +550,7 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
           <EmptyHeader>
             <EmptyTitle>{error}</EmptyTitle>
           </EmptyHeader>
-          <Button variant="outline" onClick={() => navigate("settings")}>
+          <Button variant="outline" onClick={() => openPage("settings")}>
             {t("skbird.goSettings")}
           </Button>
         </Empty>
@@ -513,13 +571,15 @@ export function SkbirdIndexPage({ context, pluginId, navigate }: PluginPageProps
           <div className="flex flex-col gap-3 max-sm:gap-0">
             {threads.map((thread, i) => (
               <SkbirdThreadCard
-                context={context}
+                media={media}
+                t={t}
                 key={thread.threadId || `t-${i}`}
                 thread={thread}
-                href={pluginPageHref(pluginId, "thread", {
-                  id: thread.threadId,
-                })}
-                onOpen={captureScrollBeforeNavigation}
+                href={pageHref("thread", { id: thread.threadId })}
+                onOpen={() => {
+                  captureScrollBeforeNavigation()
+                  openPage("thread", { id: thread.threadId })
+                }}
               />
             ))}
           </div>

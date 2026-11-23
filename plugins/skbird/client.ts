@@ -9,7 +9,7 @@
  *
  * 参考实现：purepy/zanao.py（签名 118/118 抓包验证）。
  */
-import type { PluginHttpService } from "@orahako/plugin-sdk"
+import type { PluginHttpService } from "@orahako/sdk"
 import { makeSign, type SignEntry } from "./sign"
 import {
   toCategoryList,

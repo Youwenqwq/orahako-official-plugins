@@ -1,24 +1,65 @@
-"use client"
-
 import { useCallback, useEffect, useState } from "react"
 import { BadgeCheck, Bookmark, MessageSquare, ThumbsUp } from "lucide-react"
-import type { PluginPageProps } from "@orahako/plugin-sdk"
-import { Badge } from "@orahako/plugin-ui/components"
-import { Button } from "@orahako/plugin-ui/components"
-import { Separator } from "@orahako/plugin-ui/components"
-import { Skeleton } from "@orahako/plugin-ui/components"
-import { Empty, EmptyHeader, EmptyTitle } from "@orahako/plugin-ui/components"
-import { useTranslation } from "@orahako/plugin-ui/hooks"
-import { SkbirdError, skbirdImageUrl, SKBIRD_ERRNO_TOKEN_INVALID } from "../client"
-import { getSkbirdClient } from "../store"
+import type {
+  DerivedComponentProps,
+  ObservableSource,
+  RouteLocation,
+  SlotComponent,
+} from "@orahako/sdk"
+import {
+  Badge,
+  Button,
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  Separator,
+  Skeleton,
+} from "@orahako/ui-primitives"
+import {
+  SKBIRD_ERRNO_TOKEN_INVALID,
+  SkbirdError,
+  skbirdImageUrl,
+  type SkbirdClient,
+} from "../client"
+import type { SkbirdDictionary } from "../i18n"
+import type { SkbirdConfigStoreInstance } from "../store"
 import { isCertThread, mergeSkbirdThread, type SkbirdComment, type SkbirdThread } from "../types"
-import { skbirdFeedState } from "../feed-state"
-import { SkbirdImage } from "../components/skbird-image"
+import { SkbirdImage, type SkbirdMediaAccess } from "../components/skbird-image"
 import { SkbirdCommentItem } from "../components/comment-item"
 
-export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps) {
-  const { t } = useTranslation()
-  const id = params.get("id")
+export interface SkbirdThreadInject {
+  readonly hooks: {
+    readonly hydrated: ObservableSource<boolean>
+    readonly location: ObservableSource<RouteLocation>
+  }
+  readonly getClient: () => SkbirdClient | null
+  readonly media: SkbirdMediaAccess
+  readonly openSettings: () => void
+  readonly readThreadSnapshot: (id: string) => SkbirdThread | undefined
+}
+
+export type SkbirdThreadPageProps = DerivedComponentProps<
+  Record<string, never>,
+  SkbirdDictionary,
+  undefined,
+  SkbirdConfigStoreInstance,
+  SkbirdThreadInject
+>
+
+export const SkbirdThreadPage: SlotComponent<SkbirdThreadPageProps> = (props) => {
+  const {
+    t,
+    useStore,
+    useHydrated,
+    useLocation,
+    getClient,
+    media,
+    openSettings,
+    readThreadSnapshot,
+  } = props
+  const token = useStore((state) => state.token)
+  const hasHydrated = useHydrated()
+  const id = useLocation().params.id
 
   const [thread, setThread] = useState<SkbirdThread | null>(null)
   /** 解锁后从马住列表读出的全文（仅认证帖） */
@@ -30,13 +71,13 @@ export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps)
   const [markPending, setMarkPending] = useState(false)
 
   useEffect(() => {
-    const client = getSkbirdClient()
-    if (!id) return
+    const client = getClient()
+    if (!id || !hasHydrated) return
     if (!client) {
       setError(t("skbird.noToken"))
       return
     }
-    const cachedThread = skbirdFeedState.read()?.threads.find((item) => item.threadId === id)
+    const cachedThread = readThreadSnapshot(id)
     let cancelled = false
     client
       .thread(id)
@@ -68,10 +109,10 @@ export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps)
     return () => {
       cancelled = true
     }
-  }, [id, t])
+  }, [id, t, hasHydrated, getClient, readThreadSnapshot])
 
   const handleUnlock = useCallback(async () => {
-    const client = getSkbirdClient()
+    const client = getClient()
     if (!client || !id || !thread) return
     setUnlocking(true)
     try {
@@ -86,10 +127,10 @@ export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps)
     } finally {
       setUnlocking(false)
     }
-  }, [id, t, thread])
+  }, [id, t, thread, getClient])
 
   const handleLike = useCallback(async () => {
-    const client = getSkbirdClient()
+    const client = getClient()
     if (!client || !thread || likePending) return
     setLikePending(true)
     const next = !thread.likeHas
@@ -105,10 +146,10 @@ export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps)
     } finally {
       setLikePending(false)
     }
-  }, [thread, likePending])
+  }, [thread, likePending, getClient])
 
   const handleMark = useCallback(async () => {
-    const client = getSkbirdClient()
+    const client = getClient()
     if (!client || !thread || markPending) return
     setMarkPending(true)
     const next = !thread.markHas
@@ -124,7 +165,29 @@ export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps)
     } finally {
       setMarkPending(false)
     }
-  }, [thread, markPending])
+  }, [thread, markPending, getClient])
+
+  const likeComment = useCallback(
+    async (threadId: string, commentId: string, action: 0 | 1) => {
+      const client = getClient()
+      if (!client) throw new Error("Skbird client is unavailable")
+      await client.like(threadId, action, commentId)
+    },
+    [getClient]
+  )
+
+  if (hasHydrated && !token) {
+    return (
+      <div className="p-4">
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>{t("skbird.noToken")}</EmptyTitle>
+          </EmptyHeader>
+          <Button onClick={() => openSettings()}>{t("skbird.goSettings")}</Button>
+        </Empty>
+      </div>
+    )
+  }
 
   if (error) {
     return (
@@ -133,7 +196,7 @@ export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps)
           <EmptyHeader>
             <EmptyTitle>{error}</EmptyTitle>
           </EmptyHeader>
-          <Button variant="outline" onClick={() => navigate("settings")}>
+          <Button variant="outline" onClick={() => openSettings()}>
             {t("skbird.goSettings")}
           </Button>
         </Empty>
@@ -160,7 +223,8 @@ export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps)
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {thread.avatarUrl ? (
             <SkbirdImage
-              context={context}
+              media={media}
+              t={t}
               url={skbirdImageUrl(thread.avatarUrl, { w: 64, h: 64 })}
               alt={thread.nickname}
               className="size-6 shrink-0 rounded-full object-cover"
@@ -198,7 +262,8 @@ export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps)
           <div className="flex flex-wrap gap-2">
             {display.imgPaths.map((p) => (
               <SkbirdImage
-                context={context}
+                media={media}
+                t={t}
                 key={p}
                 url={skbirdImageUrl(p, { w: 200, h: 200 })}
                 zoomUrl={skbirdImageUrl(p, "original")}
@@ -255,10 +320,12 @@ export function SkbirdThreadPage({ context, params, navigate }: PluginPageProps)
           <div className="flex flex-col gap-5">
             {comments.map((c) => (
               <SkbirdCommentItem
-                context={context}
+                media={media}
+                t={t}
                 key={c.commentId}
                 comment={c}
                 threadId={thread.threadId}
+                likeComment={likeComment}
               />
             ))}
           </div>

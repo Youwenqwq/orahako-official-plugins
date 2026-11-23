@@ -3,18 +3,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { BellRing, LocateFixed, LockOpen, RefreshCw, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
-import { Alert, AlertDescription, AlertTitle } from "@orahako/plugin-ui/components"
-import { Badge } from "@orahako/plugin-ui/components"
-import { Button } from "@orahako/plugin-ui/components"
-import { Progress } from "@orahako/plugin-ui/components"
 import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Badge,
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@orahako/plugin-ui/components"
+  Progress,
+  cn,
+} from "@orahako/ui-primitives"
 import { PerlicaRouteMap } from "./perlica-route-map"
 import type { PerlicaClient } from "../extras/client"
 import type {
@@ -24,9 +27,7 @@ import type {
   PerlicaMachineStatus,
   PerlicaOrder,
 } from "../extras/types"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
-import { PERLICA_PLUGIN_ID } from "../constants"
-import { cn } from "@orahako/plugin-ui/components"
+import type { PerlicaTranslator } from "../i18n"
 
 const MACHINE_POLL_INTERVAL = 20_000
 const ORDER_RECONCILE_DELAYS = [700, 1500]
@@ -42,6 +43,7 @@ export interface PerlicaMachineDetailProps {
   onRequestLocation: () => Promise<PerlicaCoords | null>
   onShowOrder: () => void
   reportError: (error: unknown) => void
+  t: PerlicaTranslator
 }
 
 type UnlockCandidate = {
@@ -172,8 +174,8 @@ export function PerlicaMachineDetail({
   onRequestLocation,
   onShowOrder,
   reportError,
+  t,
 }: PerlicaMachineDetailProps) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
   const normalizedCode = code.trim()
   const codeRef = useRef(normalizedCode)
   const machineRef = useRef(machine)
@@ -745,6 +747,7 @@ export function PerlicaMachineDetail({
               <PerlicaRouteMap
                 start={position}
                 startName={safeText(address) || displayText(ids.userCode)}
+                t={t}
               />
             </div>
           ) : (

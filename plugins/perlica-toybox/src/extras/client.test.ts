@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { HttpRequest, HttpResponse, PluginHttpService } from "@orahako/plugin-sdk"
+import type { HttpRequest, HttpResponse, PluginHttpService } from "@orahako/sdk"
 import { PerlicaClient, PerlicaError, type PerlicaConfig } from "./client"
 import { toPerlicaRideDetail } from "./types"
 
@@ -9,13 +9,17 @@ const COORDS = { lat: 30.123, lng: 120.456 }
 
 const sendMock = vi.fn<(request: HttpRequest) => Promise<HttpResponse>>()
 
+const activity = {
+  getSnapshot: () => ({ active: [], history: [], session: null, revision: 0 }),
+  subscribe: () => () => {},
+  beginRequest: () => () => {},
+  registerLabeler: () => () => {},
+  registerClassifier: () => () => {},
+}
+
 const http: PluginHttpService = {
   send: (request) => sendMock(request),
-  activity: {
-    getSnapshot: () => ({ active: [], history: [], session: null, revision: 0 }),
-    subscribe: () => () => {},
-    registerLabeler: () => () => {},
-  },
+  activity: { ...activity, state: activity },
 }
 
 function newClient(config: PerlicaConfig = CONFIG): PerlicaClient {

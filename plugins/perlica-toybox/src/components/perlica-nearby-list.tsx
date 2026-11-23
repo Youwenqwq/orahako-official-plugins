@@ -1,18 +1,16 @@
 "use client"
 
 import { Bike, ChevronRight, Clock3 } from "lucide-react"
-import { Badge } from "@orahako/plugin-ui/components"
-import { Skeleton } from "@orahako/plugin-ui/components"
+import { Badge, Skeleton, cn } from "@orahako/ui-primitives"
 import type { PerlicaMachine } from "../extras/types"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
-import { PERLICA_PLUGIN_ID } from "../constants"
-import { cn } from "@orahako/plugin-ui/components"
+import type { PerlicaTranslator } from "../i18n"
 
 interface Props {
   machines: PerlicaMachine[]
   selectedCode: string
   loading?: boolean
   onSelect: (code: string) => void
+  t: PerlicaTranslator
 }
 
 const STALE_POSITION_MS = 6 * 60 * 60 * 1000
@@ -48,9 +46,7 @@ function NearbySkeleton() {
  * Nearby-bike list rows: leading symbol, code with status badge, secondary
  * detail lines, and a trailing disclosure indicator.
  */
-export function PerlicaNearbyList({ machines, selectedCode, loading = false, onSelect }: Props) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
-
+export function PerlicaNearbyList({ machines, selectedCode, loading = false, onSelect, t }: Props) {
   if (loading && machines.length === 0) return <NearbySkeleton />
   if (machines.length === 0) return null
 

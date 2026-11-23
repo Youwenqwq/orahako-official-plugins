@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { PluginKeyValueStorage } from "@orahako/plugin-sdk"
+import type { PluginKeyValueStorage } from "@orahako/sdk"
 import { createPerlicaSnapshotCache, type PerlicaSnapshot } from "./cache"
 
 function createStorage(initial?: Record<string, string>) {

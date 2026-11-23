@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
-import type { CookieJar, HttpRequest, HttpResponse } from "@orahako/plugin-sdk"
-import { ProviderErrorCode } from "@orahako/plugin-sdk/provider-errors"
+import type { HttpRequest, HttpResponse } from "@orahako/sdk"
+import type { CookieJar } from "@orahako/academic-sdk"
+import { ProviderErrorCode } from "@orahako/academic-sdk"
 import { ZMUProvider } from "./zmu-provider"
 import { createTestSession, TestCookieJar } from "./test-support"
 
@@ -29,7 +30,7 @@ describe("ZMUProvider auth", () => {
     })
     const provider = new ZMUProvider(services)
     await expect(
-      provider.loginStep1({ username: "student", password: "secret" })
+      provider.slices.auth.loginStep1({ username: "student", password: "secret" })
     ).rejects.toMatchObject({ code: ProviderErrorCode.AUTH_CAPTCHA_REQUIRED, status: 403 })
   })
 
@@ -45,19 +46,19 @@ describe("ZMUProvider auth", () => {
       return jsonResponse("")
     })
     const provider = new ZMUProvider(services)
-    await provider.prepareLogin()
-    await provider.checkCaptchaNeeded("student")
-    await provider.login({
+    await provider.slices.auth.prepareLogin()
+    await provider.slices.auth.checkCaptchaNeeded!("student")
+    await provider.slices.auth.login({
       username: "student",
       password: "secret",
       metadata: { captcha: "2enb" },
     })
     expect(session.getSnapshot().credential).toContain("zmu-session")
     expect(session.getSnapshot().username).toBe("student")
-    expect(provider.isAuthenticated()).toBe(true)
+    expect(provider.slices.auth.isAuthenticated()).toBe(true)
     await provider.logout()
     expect(session.getSnapshot().credential).toBeNull()
-    expect(provider.isAuthenticated()).toBe(false)
+    expect(provider.slices.auth.isAuthenticated()).toBe(false)
     expect(query.clearPersistent).toHaveBeenCalled()
     expect(query.invalidate).toHaveBeenCalled()
   })
@@ -82,14 +83,14 @@ describe("ZMUProvider auth", () => {
     const provider = new ZMUProvider(services)
     await provider.initialize()
     expect(session.getSnapshot().credential).toBeNull()
-    expect(provider.isAuthenticated()).toBe(false)
+    expect(provider.slices.auth.isAuthenticated()).toBe(false)
   })
 
   it("provides all twelve period rows required by the schedule grid", async () => {
     const { services } = createServices(async () => {
       throw new Error("unexpected request")
     })
-    const periods = await new ZMUProvider(services).getClassPeriods()
+    const periods = await new ZMUProvider(services).slices.timetable.getClassPeriods!()
     expect(periods.map((period) => period.section)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
     ])
@@ -102,7 +103,11 @@ describe("ZMUProvider auth", () => {
     )
     const provider = new ZMUProvider(services)
     await expect(
-      provider.loginStep1({ username: "student", password: "secret", captcha: "bad1" })
+      provider.slices.auth.loginStep1({
+        username: "student",
+        password: "secret",
+        captcha: "bad1",
+      })
     ).rejects.toMatchObject({ code: ProviderErrorCode.AUTH_CAPTCHA_REQUIRED, status: 403 })
   })
 })

@@ -1,10 +1,10 @@
-import type { PluginTranslations } from "@orahako/plugin-sdk"
+import { defineDictionary, type Translator } from "@orahako/sdk"
 
 /**
  * Perlica copy lifted from the host dictionary at port time. The package owns
  * these strings end to end; host dictionaries are never patched.
  */
-export const perlicaTranslations: PluginTranslations = {
+export const perlicaDictionary = defineDictionary({
   zh: {
     perlica: {
       nav: "佩黎卡",
@@ -548,4 +548,7 @@ export const perlicaTranslations: PluginTranslations = {
       scannerChooseImage: "Choose image",
     },
   },
-}
+})
+
+export type PerlicaDictionary = typeof perlicaDictionary
+export type PerlicaTranslator = Translator<PerlicaDictionary>

@@ -1,16 +1,17 @@
+import {
+  aes128EcbEncrypt,
+  bytesToBase64,
+  type HttpRequest,
+  type HttpResponse,
+} from "@orahako/sdk"
 import type {
   CookieJar,
-  HttpRequest,
-  HttpResponse,
-  PluginSessionService,
-} from "@orahako/plugin-sdk"
-import { aes128EcbEncrypt, bytesToBase64 } from "@orahako/plugin-sdk/crypto"
-import type {
   ExamQueryOptions,
   GradeQueryOptions,
   ScheduleQueryOptions,
-} from "@orahako/plugin-sdk/academic"
-import { ProviderError, ProviderErrorCode } from "@orahako/plugin-sdk/provider-errors"
+  SessionService,
+} from "@orahako/academic-sdk"
+import { ProviderError, ProviderErrorCode } from "@orahako/academic-sdk"
 import {
   discoverCurrentSemester,
   mapExams,
@@ -26,7 +27,7 @@ import { ZMU_CONFIG } from "../zmu-config"
 const ZMU_BASE_URL = ZMU_CONFIG.jwxt.jwxtBaseUrl
 
 /** The session subset a ZMU client needs: a cookie jar plus jar-bound fetch. */
-export type ZMUClientSession = Pick<PluginSessionService, "createCookieJar" | "fetchWithJar">
+export type ZMUClientSession = Pick<SessionService, "createCookieJar" | "fetchWithJar">
 
 export interface ZmuLoginResult {
   code: number

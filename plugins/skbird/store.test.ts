@@ -1,46 +1,53 @@
 import { describe, expect, it, vi } from "vitest"
-import type { PluginHttpService } from "@orahako/plugin-sdk"
-import { getSkbirdStore, initSkbirdStore, SKBIRD_STORAGE_KEY } from "./store"
+import type { PluginStorageService } from "@orahako/sdk"
+import { SKBIRD_STORAGE_KEY, skbirdConfigStore } from "./store"
 
-const storage = {
-  getItem: vi.fn(async (_key: string) => null as string | null),
-  setItem: vi.fn(async (_key: string, _value: string) => undefined),
-  removeItem: vi.fn(async (_key: string) => undefined),
-}
-
-const http: PluginHttpService = {
-  send: vi.fn(),
-  activity: {
-    getSnapshot: () => ({ active: [], history: [], session: null, revision: 0 }),
-    subscribe: () => () => {},
-    registerLabeler: () => () => {},
-  },
+function createStorage(initial: string | null = null) {
+  const values = new Map<string, string>()
+  if (initial !== null) values.set(SKBIRD_STORAGE_KEY, initial)
+  const keyValue = {
+    getItem: vi.fn(async (key: string) => values.get(key) ?? null),
+    setItem: vi.fn(async (key: string, value: string) => {
+      values.set(key, value)
+    }),
+    removeItem: vi.fn(async (key: string) => {
+      values.delete(key)
+    }),
+  }
+  const storage: PluginStorageService = { local: keyValue, secure: keyValue }
+  return { storage, keyValue }
 }
 
 describe("Skbird credential persistence", () => {
   it("rehydrates and writes through the injected secure storage with the plugin-owned key", async () => {
-    initSkbirdStore({ http, storage })
-    await vi.waitFor(() => expect(getSkbirdStore().getState().hasHydrated).toBe(true))
+    const { storage, keyValue } = createStorage()
+    const instance = skbirdConfigStore.create(storage)
+    await vi.waitFor(() => expect(instance.hydrated.getSnapshot()).toBe(true))
 
     expect(SKBIRD_STORAGE_KEY.length).toBeGreaterThan(0)
-    expect(storage.getItem).toHaveBeenCalledWith(SKBIRD_STORAGE_KEY)
+    expect(keyValue.getItem).toHaveBeenCalledWith(SKBIRD_STORAGE_KEY)
 
-    getSkbirdStore().getState().setConfig({
+    instance.actions.setConfig({
       token: " TOKEN ",
       deviceId: "",
       alias: " ysu ",
     })
     await vi.waitFor(() =>
-      expect(storage.setItem).toHaveBeenCalledWith(SKBIRD_STORAGE_KEY, expect.any(String))
+      expect(keyValue.setItem).toHaveBeenCalledWith(SKBIRD_STORAGE_KEY, expect.any(String))
     )
 
-    const serialized = storage.setItem.mock.calls.at(-1)![1]
-    const saved = JSON.parse(serialized) as { state: Record<string, unknown> }
+    const saved = JSON.parse(keyValue.setItem.mock.calls.at(-1)![1]) as {
+      version: number
+      state: Record<string, unknown>
+    }
+    expect(saved.version).toBe(1)
     expect(saved.state).toMatchObject({
       token: "TOKEN",
       alias: "ysu",
       deviceId: expect.stringMatching(/^[0-9a-f-]+$/),
     })
     expect(saved.state).not.toHaveProperty("unreadCount")
+    instance.dispose()
   })
+
 })

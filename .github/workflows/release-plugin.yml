@@ -1,8 +1,8 @@
 name: Release Plugin
 
 # Tags are <plugin-id>@<version> and must exactly match one plugin manifest.
-# The resulting Release is an internal build artifact, not public marketplace
-# distribution; public ZIPs remain served by the main website.
+# Releases preserve the build and checksum. Public installation bytes are the
+# matching committed artifacts in orahako-plugin-registry, served by GitHub Raw.
 on:
   push:
     tags:
@@ -65,12 +65,10 @@ jobs:
           test -f "$ZIP" || { echo "::error::Missing release artifact: $ZIP"; exit 1; }
           SHA256=$(sha256sum "$ZIP" | awk '{print $1}')
           cat > release-notes.md <<EOF
-          Internal release for \`${PLUGIN_ID}\` ${VERSION}.
+          Release for \`${PLUGIN_ID}\` ${VERSION}, API v1.
 
-          This repository is private. The ZIP is distributed to maintainers and
-          internal testers only; the public marketplace continues to be served
-          from https://ysu.welain.com/updates/plugins.json until public object/CDN
-          distribution is introduced.
+          Marketplace distribution is reviewed separately in
+          https://github.com/Youwenqwq/orahako-plugin-registry and served through GitHub Raw.
 
           SHA-256: \`${SHA256}\`
           EOF

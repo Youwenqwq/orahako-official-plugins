@@ -103,8 +103,8 @@ export function createSkbirdFeedStateStore(
 }
 
 /**
- * Session-only store shared by the plugin's list and detail pages. It keeps
- * filters, loaded threads, pagination cursors and scroll offsets while the
- * user moves between pages, and deliberately does not outlive the app.
+ * Session-only store shared by the plugin's list and detail pages. The plugin
+ * creates one instance in `apply`, so filters, loaded threads, pagination
+ * cursors and scroll offsets survive page navigation within one activation and
+ * are dropped when the plugin is disposed or the app reloads.
  */
-export const skbirdFeedState = createSkbirdFeedStateStore()

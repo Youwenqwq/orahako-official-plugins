@@ -1,12 +1,7 @@
-"use client"
-
 import { useEffect, useMemo, useRef, useState } from "react"
-import Link from "next/link"
 import { Check, LogOut } from "lucide-react"
 import { toast } from "sonner"
-import { pluginPageHref, type PluginPageProps } from "@orahako/plugin-sdk"
-import { PERLICA_PLUGIN_ID, PERLICA_PAGE_INDEX } from "./constants"
-import { perlicaTab } from "./extras/app-nav"
+import type { DerivedComponentProps, ObservableSource } from "@orahako/sdk"
 import {
   Button,
   Card,
@@ -21,24 +16,40 @@ import {
   Input,
   Skeleton,
   Textarea,
-} from "@orahako/plugin-ui/components"
+} from "@orahako/ui-primitives"
 import { PerlicaAccountVerification } from "./components/perlica-account"
-import type { PerlicaSnapshot } from "./extras/cache"
-import { PerlicaError } from "./extras/client"
-import { usePerlicaRuntime, usePerlicaStore } from "./runtime"
+import type { PerlicaSnapshot, PerlicaSnapshotCache } from "./extras/cache"
+import { PerlicaError, type PerlicaClient, type PerlicaConfig } from "./extras/client"
+import type { PerlicaStoreInstance } from "./extras/store"
 import { parsePerlicaToken } from "./extras/types"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
+import type { PerlicaDictionary } from "./i18n"
 
-export function PerlicaSettingsPage({ params }: PluginPageProps) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
-  const runtime = usePerlicaRuntime()
-  const activeTab = perlicaTab(params)
-  const token = usePerlicaStore((state) => state.token)
-  const accountId = usePerlicaStore((state) => state.accountId)
-  const adAccountId = usePerlicaStore((state) => state.adAccountId)
-  const hasHydrated = usePerlicaStore((state) => state.hasHydrated)
-  const login = usePerlicaStore((state) => state.login)
-  const logout = usePerlicaStore((state) => state.logout)
+export interface PerlicaSettingsInject {
+  readonly hooks: {
+    readonly hydrated: ObservableSource<boolean>
+  }
+  readonly createClient: (config: PerlicaConfig) => PerlicaClient
+  readonly readSnapshot: PerlicaSnapshotCache["read"]
+  readonly clearSnapshot: PerlicaSnapshotCache["clear"]
+  readonly openPerlica: () => void
+}
+
+export type PerlicaSettingsProps = DerivedComponentProps<
+  Record<string, never>,
+  PerlicaDictionary,
+  undefined,
+  PerlicaStoreInstance,
+  PerlicaSettingsInject
+>
+
+export function PerlicaSettingsPanel(props: PerlicaSettingsProps) {
+  const { t } = props
+  const { login, logout } = props.actions
+  const readSnapshot = props.readSnapshot
+  const token = props.useStore((state) => state.token)
+  const accountId = props.useStore((state) => state.accountId)
+  const adAccountId = props.useStore((state) => state.adAccountId)
+  const hasHydrated = props.useHydrated()
 
   const [input, setInput] = useState("")
   const [adAccountInput, setAdAccountInput] = useState("11423")
@@ -71,13 +82,14 @@ export function PerlicaSettingsPage({ params }: PluginPageProps) {
       return
     }
     let cancelled = false
-    void runtime.cache.read(accountId).then((snapshot) => {
+    void readSnapshot(accountId).then((snapshot) => {
       if (!cancelled) setDebugSnapshot(snapshot)
     })
     return () => {
       cancelled = true
     }
-  }, [accountId, hasHydrated, runtime])
+  }, [accountId, hasHydrated, readSnapshot])
+
   const debugJson = useMemo(() => {
     if (!debugSnapshot) return ""
     return JSON.stringify(debugSnapshot, null, 2)
@@ -106,13 +118,13 @@ export function PerlicaSettingsPage({ params }: PluginPageProps) {
         accountId: parsed.accountId,
         adAccountId: adAccountInput.trim() || "11423",
       }
-      const client = runtime.createClient(config)
+      const client = props.createClient(config)
       const info = await client.userInfo()
       if (!mountedRef.current || generation !== validationGenerationRef.current) return
       if (accountId !== parsed.accountId) {
         await Promise.all([
-          runtime.cache.clear(accountId),
-          runtime.cache.clear(parsed.accountId),
+          props.clearSnapshot(accountId),
+          props.clearSnapshot(parsed.accountId),
         ])
         if (!mountedRef.current || generation !== validationGenerationRef.current) return
       }
@@ -147,7 +159,7 @@ export function PerlicaSettingsPage({ params }: PluginPageProps) {
   function handleLogout() {
     validationGenerationRef.current += 1
     setValidating(false)
-    void runtime.cache.clear(accountId)
+    void props.clearSnapshot(accountId)
     logout()
     setInput("")
     setAdAccountInput("11423")
@@ -155,15 +167,11 @@ export function PerlicaSettingsPage({ params }: PluginPageProps) {
   }
 
   if (!hasHydrated) {
-    return (
-      <div className="p-4">
-        <Skeleton className="h-80 w-full" />
-      </div>
-    )
+    return <Skeleton className="h-80 w-full" />
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle>{t("perlica.settingsTitle")}</CardTitle>
@@ -219,7 +227,7 @@ export function PerlicaSettingsPage({ params }: PluginPageProps) {
             <CardTitle>{t("perlica.accountInformation")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <PerlicaAccountVerification user={debugSnapshot.user} />
+            <PerlicaAccountVerification user={debugSnapshot.user} t={t} />
           </CardContent>
         </Card>
       ) : null}
@@ -254,10 +262,8 @@ export function PerlicaSettingsPage({ params }: PluginPageProps) {
         </CardContent>
       </Card>
 
-      <Button asChild variant="ghost" className="self-start">
-        <Link href={pluginPageHref(PERLICA_PLUGIN_ID, PERLICA_PAGE_INDEX, { tab: activeTab })}>
-          {t("perlica.backToPerlica")}
-        </Link>
+      <Button type="button" variant="ghost" className="self-start" onClick={props.openPerlica}>
+        {t("perlica.backToPerlica")}
       </Button>
     </div>
   )

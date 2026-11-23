@@ -1,12 +1,9 @@
-"use client"
-
 import { useEffect, useRef, useState } from "react"
 import { X } from "lucide-react"
 import { toast } from "sonner"
-import type { PluginContext } from "@orahako/plugin-sdk"
-import { Skeleton } from "@orahako/plugin-ui/components"
-import { Button } from "@orahako/plugin-ui/components"
+import type { Translator } from "@orahako/sdk"
 import {
+  Button,
   Drawer,
   DrawerClose,
   DrawerContent,
@@ -14,10 +11,17 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
-} from "@orahako/plugin-ui/components"
-import { useTranslation } from "@orahako/plugin-ui/hooks"
-import { useBackLayer } from "@orahako/plugin-ui/hooks"
-import { fetchImageBlob } from "../http"
+  Skeleton,
+  useBackLayer,
+} from "@orahako/ui-primitives"
+import type { SkbirdDictionary } from "../i18n"
+
+/** Host capabilities an image needs: transport, gallery save and native flag. */
+export interface SkbirdMediaAccess {
+  readonly fetchImage: (url: string) => Promise<Blob>
+  readonly isNative: boolean
+  readonly saveImage: (blob: Blob, fileName?: string) => Promise<{ uri: string }>
+}
 
 /** 关闭动画时长，与过渡类 duration 匹配 */
 const LIGHTBOX_TRANSITION_MS = 200
@@ -42,17 +46,18 @@ function extForMime(mime: string): string {
 }
 
 function Lightbox({
-  context,
+  media,
+  t,
   url,
   alt,
   onClose,
 }: {
-  context: PluginContext
+  media: SkbirdMediaAccess
+  t: Translator<SkbirdDictionary>
   url: string
   alt: string
   onClose: () => void
 }) {
-  const { t } = useTranslation()
   const [entered, setEntered] = useState(false)
   const [closing, setClosing] = useState(false)
   const [zoomedIn, setZoomedIn] = useState(false)
@@ -76,7 +81,7 @@ function Lightbox({
   const longPressTimerRef = useRef<number | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [saveSheetOpen, setSaveSheetOpen] = useState(false)
-  const native = context.native.isNative
+  const native = media.isNative
 
   // 挂载后下一帧进入，触发开启过渡
   useEffect(() => {
@@ -187,7 +192,7 @@ function Lightbox({
       const blob = await (await fetch(src)).blob()
       if (blob.size > 0) return blob
     }
-    return fetchImageBlob(context.http, url)
+    return media.fetchImage(url)
   }
 
   async function saveImage() {
@@ -195,7 +200,7 @@ function Lightbox({
     setSaving(true)
     try {
       const blob = await loadDisplayedBlob()
-      await context.native.saveImage(
+      await media.saveImage(
         blob,
         `skbird_${Date.now()}.${extForMime(blob.type || "image/jpeg")}`
       )
@@ -334,7 +339,8 @@ function Lightbox({
           role="presentation"
         >
           <SkbirdImage
-            context={context}
+            media={media}
+            t={t}
             url={url}
             alt={alt}
             className={`max-h-[90vh] max-w-[92vw] object-contain transition-opacity duration-200 ${
@@ -345,6 +351,7 @@ function Lightbox({
       </div>
       {native ? (
         <SaveSheet
+          t={t}
           open={saveSheetOpen}
           onOpenChange={setSaveSheetOpen}
           saving={saving}
@@ -359,17 +366,18 @@ function Lightbox({
  * 关闭处理器（React 合成事件会穿过 portal 沿 React 树冒泡，放在根节点内会让
  * 点“保存/取消”连带关闭大图）。 */
 function SaveSheet({
+  t,
   open,
   onOpenChange,
   saving,
   onSave,
 }: {
+  t: Translator<SkbirdDictionary>
   open: boolean
   onOpenChange: (open: boolean) => void
   saving: boolean
   onSave: () => void
 }) {
-  const { t } = useTranslation()
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent>
@@ -393,7 +401,7 @@ function SaveSheet({
 }
 
 /**
- * 森空鸟 CDN 图片。双端统一走 `ctx.http.send` 拉取后转 object URL：
+ * 森空鸟 CDN 图片。双端统一走宿主 HTTP 传输拉取后转 object URL：
  * - Native：WebView 默认拦截 https 页面加载 http 子资源（mixed content）。
  *
  * 例外：HTTPS 直链（如微信头像 thirdwx.qlogo.cn）无 mixed content 问题，
@@ -405,14 +413,16 @@ function SaveSheet({
  * zoomUrl 指定放大用的大图（未指定则复用当前 src，无额外请求）。
  */
 export function SkbirdImage({
-  context,
+  media,
+  t,
   url,
   alt,
   className,
   zoomable = false,
   zoomUrl,
 }: {
-  context: PluginContext
+  media: SkbirdMediaAccess
+  t: Translator<SkbirdDictionary>
   url: string
   alt: string
   className?: string
@@ -430,7 +440,8 @@ export function SkbirdImage({
     let objectUrl: string | null = null
     setSrc(null)
     setFailed(false)
-    fetchImageBlob(context.http, url)
+    media
+      .fetchImage(url)
       .then((blob) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(blob)
@@ -443,7 +454,7 @@ export function SkbirdImage({
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [context.http, url, direct])
+  }, [media, url, direct])
 
   if (!direct) {
     if (failed) return null
@@ -453,7 +464,6 @@ export function SkbirdImage({
 
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element -- object URL/外部直链，无需 Next 图片优化 */}
       <img
         src={showSrc}
         alt={alt}
@@ -463,7 +473,8 @@ export function SkbirdImage({
       />
       {zoomable && zoomed ? (
         <Lightbox
-          context={context}
+          media={media}
+          t={t}
           url={zoomUrl ?? url}
           alt={alt}
           onClose={() => setZoomed(false)}

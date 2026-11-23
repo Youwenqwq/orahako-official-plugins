@@ -1,36 +1,52 @@
-"use client"
-
-import Link from "next/link"
+import type { MouseEvent } from "react"
 import { BadgeCheck, Eye, MessageSquare, ThumbsUp } from "lucide-react"
-import type { PluginContext } from "@orahako/plugin-sdk"
-import { Badge } from "@orahako/plugin-ui/components"
-import { useTranslation } from "@orahako/plugin-ui/hooks"
+import type { Translator } from "@orahako/sdk"
+import { Badge } from "@orahako/ui-primitives"
 import { skbirdImageUrl } from "../client"
+import type { SkbirdDictionary } from "../i18n"
 import { isCertThread, type SkbirdThread } from "../types"
-import { SkbirdImage } from "./skbird-image"
+import { SkbirdImage, type SkbirdMediaAccess } from "./skbird-image"
 
 export function SkbirdThreadCard({
-  context,
+  media,
+  t,
   thread,
   href,
   onOpen,
 }: {
-  context: PluginContext
+  media: SkbirdMediaAccess
+  t: Translator<SkbirdDictionary>
   thread: SkbirdThread
   href: string
   onOpen?: () => void
 }) {
-  const { t } = useTranslation()
   const cert = isCertThread(thread)
   const hidden = cert && !thread.title && !thread.content
 
+  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (
+      !onOpen ||
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return
+    }
+    event.preventDefault()
+    onOpen()
+  }
+
   return (
-    <Link href={href} className="block border-t first:border-t-0 sm:border-t-0" onClick={onOpen}>
+    <a href={href} className="block border-t first:border-t-0 sm:border-t-0" onClick={handleClick}>
       <div className="flex flex-col gap-2 py-3 transition-colors sm:rounded-xl sm:bg-card sm:p-4 sm:text-sm sm:text-card-foreground sm:ring-1 sm:ring-foreground/10 sm:hover:bg-muted/50">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {thread.avatarUrl ? (
             <SkbirdImage
-              context={context}
+              media={media}
+              t={t}
               url={skbirdImageUrl(thread.avatarUrl, { w: 64, h: 64 })}
               alt={thread.nickname}
               className="size-5 shrink-0 rounded-full object-cover"
@@ -62,7 +78,8 @@ export function SkbirdThreadCard({
           <div className="flex gap-2">
             {thread.imgPaths.slice(0, 3).map((p) => (
               <SkbirdImage
-                context={context}
+                media={media}
+                t={t}
                 key={p}
                 url={skbirdImageUrl(p, { w: 200, h: 200 })}
                 alt=""
@@ -93,6 +110,6 @@ export function SkbirdThreadCard({
           </span>
         </div>
       </div>
-    </Link>
+    </a>
   )
 }

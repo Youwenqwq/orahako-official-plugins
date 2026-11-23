@@ -25,10 +25,11 @@ if (selected.length === 0) {
 }
 
 const packer = path.join(TOOLCHAIN_DIR, "scripts", "plugin.ts")
-if (!existsSync(packer)) {
+const tsxCli = path.join(TOOLCHAIN_DIR, "node_modules", "tsx", "dist", "cli.mjs")
+if (!existsSync(packer) || !existsSync(tsxCli)) {
   console.error(
-    `Missing pinned toolchain at ${path.relative(process.cwd(), TOOLCHAIN_DIR)}. ` +
-      "Run: git submodule update --init --recursive"
+    `Incomplete pinned toolchain at ${path.relative(process.cwd(), TOOLCHAIN_DIR)}. ` +
+      "Run: git submodule update --init --recursive && pnpm --dir toolchain/ysu-client install --frozen-lockfile"
   )
   process.exit(1)
 }
@@ -43,7 +44,7 @@ for (const plugin of selected) {
   console.log(`Packing ${plugin.id}@${plugin.version} -> ${path.relative(process.cwd(), plugin.artifact)}`)
   const result = spawnSync(
     process.execPath,
-    ["--experimental-transform-types", packer, "pack", plugin.directory, plugin.artifact],
+    [tsxCli, packer, "pack", plugin.directory, plugin.artifact],
     { cwd: process.cwd(), stdio: "inherit" }
   )
   if (result.error) throw result.error

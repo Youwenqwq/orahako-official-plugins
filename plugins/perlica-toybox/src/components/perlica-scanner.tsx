@@ -4,34 +4,34 @@ import { useEffect, useId, useRef, useState } from "react"
 import type { ChangeEvent } from "react"
 import type { Html5Qrcode } from "html5-qrcode"
 import { Image as ImageIcon } from "lucide-react"
-import { Button } from "@orahako/plugin-ui/components"
+import { Button } from "@orahako/ui-primitives"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@orahako/plugin-ui/components"
+} from "@orahako/ui-primitives"
 import { parsePerlicaCode } from "../extras/scan"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
-import { PERLICA_PLUGIN_ID } from "../constants"
+import type { PerlicaTranslator } from "../i18n"
 
 type QrScanner = Html5Qrcode
 type ScannerError = "loadFailed" | "cameraFailed" | "imageFailed" | "invalidCode"
 
 const CAMERA_START_TIMEOUT_MS = 8_000
 
-const ERROR_KEYS: Record<ScannerError, string> = {
+const ERROR_KEYS = {
   loadFailed: "perlica.scannerLoadFailed",
   cameraFailed: "perlica.scannerCameraFailed",
   imageFailed: "perlica.scannerImageFailed",
   invalidCode: "perlica.scannerInvalidCode",
-}
+} as const
 
 export interface PerlicaScannerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCode: (code: string) => void
+  t: PerlicaTranslator
 }
 
 function stopVideoTracks(container: HTMLDivElement) {
@@ -62,8 +62,7 @@ async function shutdownScanner(scanner: QrScanner, container: HTMLDivElement) {
   stopVideoTracks(container)
 }
 
-export function PerlicaScanner({ open, onOpenChange, onCode }: PerlicaScannerProps) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
+export function PerlicaScanner({ open, onOpenChange, onCode, t }: PerlicaScannerProps) {
   const reactId = useId()
   const scannerId = `perlica-scanner-${reactId.replace(/:/g, "")}`
   const [containerElement, setContainerElement] = useState<HTMLDivElement | null>(null)

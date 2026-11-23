@@ -2,16 +2,16 @@
 
 import type { ReactNode } from "react"
 import { Bell, CalendarDays, ChevronDown, UserRound } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage, Badge, Skeleton } from "@orahako/plugin-ui/components"
+import { Avatar, AvatarFallback, AvatarImage, Badge, Skeleton } from "@orahako/ui-primitives"
 import type { PerlicaRaw, PerlicaRideCard, PerlicaUserInfo } from "../extras/types"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
-import { PERLICA_PLUGIN_ID } from "../constants"
+import type { PerlicaTranslator } from "../i18n"
 
 export interface PerlicaAccountProps {
   user: PerlicaUserInfo | null
   cards: PerlicaRideCard[]
   unreadCount: number | null
   loading: boolean
+  t: PerlicaTranslator
 }
 
 const REAL_NAME_FIELDS = [
@@ -161,8 +161,15 @@ function AccountSkeleton() {
   )
 }
 
-function RideCardDetails({ card, index }: { card: PerlicaRideCard; index: number }) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
+function RideCardDetails({
+  card,
+  index,
+  t,
+}: {
+  card: PerlicaRideCard
+  index: number
+  t: PerlicaTranslator
+}) {
   const title = card.name || card.feeName || t("perlica.cardNumber", { number: index + 1 })
   const description = card.name && card.feeName ? card.feeName : null
 
@@ -207,8 +214,13 @@ function RideCardDetails({ card, index }: { card: PerlicaRideCard; index: number
     </article>
   )
 }
-export function PerlicaAccountVerification({ user }: { user: PerlicaUserInfo }) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
+export function PerlicaAccountVerification({
+  user,
+  t,
+}: {
+  user: PerlicaUserInfo
+  t: PerlicaTranslator
+}) {
   const redacted = t("perlica.redacted")
 
   return (
@@ -240,8 +252,7 @@ export function PerlicaAccountVerification({ user }: { user: PerlicaUserInfo }) 
   )
 }
 
-export function PerlicaAccount({ user, cards, unreadCount, loading }: PerlicaAccountProps) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
+export function PerlicaAccount({ user, cards, unreadCount, loading, t }: PerlicaAccountProps) {
   const validCards = cards.filter((card) => card.isValid)
   const unread =
     unreadCount !== null && Number.isFinite(unreadCount) ? String(unreadCount) : MISSING
@@ -304,6 +315,7 @@ export function PerlicaAccount({ user, cards, unreadCount, loading }: PerlicaAcc
                 key={`${card.name}-${card.feeName}-${card.startDate}-${card.dueTime}-${index}`}
                 card={card}
                 index={index}
+                t={t}
               />
             ))}
           </div>

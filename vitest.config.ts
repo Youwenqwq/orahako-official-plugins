@@ -7,20 +7,17 @@ import { defineConfig } from "vitest/config"
 const toolchain = process.env.ORAHAKO_TOOLCHAIN
   ? `${process.env.ORAHAKO_TOOLCHAIN.replace(/\/$/, "")}/`
   : fileURLToPath(new URL("toolchain/ysu-client/", import.meta.url))
-const sdk = `${toolchain}packages/plugin-sdk/`
-const academic = `${toolchain}packages/academic/`
-const pluginUi = `${toolchain}packages/plugin-ui/`
+const sdk = `${toolchain}packages/core/sdk/src/index.ts`
+const academic = `${toolchain}packages/edu/sdk/src/index.ts`
+const pluginUi = `${toolchain}packages/core/ui-primitives/src/index.ts`
 
 export default defineConfig({
   resolve: {
     alias: [
       { find: /^@\/(.*)$/, replacement: `${toolchain}$1` },
-      { find: /^@orahako\/plugin-sdk$/, replacement: `${sdk}index.ts` },
-      { find: /^@orahako\/plugin-sdk\/(.*)$/, replacement: `${sdk}$1` },
-      { find: /^@orahako\/academic$/, replacement: `${academic}index.ts` },
-      { find: /^@orahako\/academic\/(.*)$/, replacement: `${academic}$1` },
-      { find: /^@orahako\/plugin-ui$/, replacement: `${pluginUi}index.ts` },
-      { find: /^@orahako\/plugin-ui\/(.*)$/, replacement: `${pluginUi}$1` },
+      { find: /^@orahako\/sdk$/, replacement: sdk },
+      { find: /^@orahako\/academic-sdk$/, replacement: academic },
+      { find: /^@orahako\/ui-primitives$/, replacement: pluginUi },
     ],
   },
   test: {

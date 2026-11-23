@@ -1,4 +1,4 @@
-import type { ProviderGPAScale } from "@orahako/plugin-sdk/academic"
+import type { ProviderGPAScale } from "@orahako/academic-sdk"
 
 /**
  * 遵义医科大学平均绩点的客户端诠释，非官方字母定级。

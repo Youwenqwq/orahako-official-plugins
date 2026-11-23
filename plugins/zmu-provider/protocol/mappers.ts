@@ -1,5 +1,5 @@
-import type { Course, CurrentWeek, Exam, Grade, StudentInfo } from "@orahako/plugin-sdk/academic"
-import { ProviderError, ProviderErrorCode } from "@orahako/plugin-sdk/provider-errors"
+import type { Course, CurrentWeek, Exam, Grade, StudentInfo } from "@orahako/academic-sdk"
+import { ProviderError, ProviderErrorCode } from "@orahako/academic-sdk"
 
 export type RawRow = Record<string, unknown>
 

@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { DivIcon, Map as LeafletMap, Marker, Polyline } from "leaflet"
 import { isUsableLatLng, wgs84ToGcj02 } from "../extras/geo"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
-import { PERLICA_PLUGIN_ID } from "../constants"
+import type { PerlicaTranslator } from "../i18n"
 import { addAmapTileLayer, type Leaflet } from "./perlica-map-tiles"
 import type { PerlicaMapCenter } from "./perlica-map"
 
@@ -14,6 +13,7 @@ export interface PerlicaRouteMapProps {
   end?: PerlicaMapCenter | null
   startName?: string
   endName?: string
+  t: PerlicaTranslator
 }
 
 function isValidPoint(point: PerlicaMapCenter | null | undefined): point is PerlicaMapCenter {
@@ -60,8 +60,7 @@ function updateMarkerLabel(marker: Marker, label: string) {
   }
 }
 
-export function PerlicaRouteMap({ route, start, end, startName, endName }: PerlicaRouteMapProps) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
+export function PerlicaRouteMap({ route, start, end, startName, endName, t }: PerlicaRouteMapProps) {
   const validStart = isValidPoint(start) ? start : null
   const validEnd = isValidPoint(end) ? end : null
   const validRoute = useMemo(() => (route ?? []).filter(isValidPoint), [route])

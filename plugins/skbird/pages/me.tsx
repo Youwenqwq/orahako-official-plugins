@@ -1,22 +1,51 @@
-"use client"
-
 import { useEffect, useState } from "react"
-import type { PluginPageProps } from "@orahako/plugin-sdk"
-import { Badge } from "@orahako/plugin-ui/components"
-import { Button } from "@orahako/plugin-ui/components"
-import { Card, CardContent } from "@orahako/plugin-ui/components"
-import { Skeleton } from "@orahako/plugin-ui/components"
-import { Empty, EmptyHeader, EmptyTitle } from "@orahako/plugin-ui/components"
-import { useTranslation } from "@orahako/plugin-ui/hooks"
-import { SkbirdError, skbirdImageUrl, SKBIRD_ERRNO_TOKEN_INVALID } from "../client"
-import { getSkbirdClient, useSkbirdStore } from "../store"
+import type {
+  DerivedComponentProps,
+  ObservableSource,
+  SlotComponent,
+} from "@orahako/sdk"
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  Skeleton,
+} from "@orahako/ui-primitives"
+import {
+  SkbirdError,
+  SKBIRD_ERRNO_TOKEN_INVALID,
+  skbirdImageUrl,
+  type SkbirdClient,
+} from "../client"
+import type { SkbirdDictionary } from "../i18n"
+import type { SkbirdConfigStoreInstance } from "../store"
 import type { SkbirdLikeStat, SkbirdUser, SkbirdUserStats } from "../types"
-import { SkbirdImage } from "../components/skbird-image"
+import { SkbirdImage, type SkbirdMediaAccess } from "../components/skbird-image"
 
-export function SkbirdMePage({ context, navigate }: PluginPageProps) {
-  const { t } = useTranslation()
-  const hasHydrated = useSkbirdStore((s) => s.hasHydrated)
-  const token = useSkbirdStore((s) => s.token)
+export interface SkbirdMeInject {
+  readonly hooks: {
+    readonly hydrated: ObservableSource<boolean>
+  }
+  readonly getClient: () => SkbirdClient | null
+  readonly media: SkbirdMediaAccess
+  readonly openSettings: () => void
+}
+
+export type SkbirdMePageProps = DerivedComponentProps<
+  Record<string, never>,
+  SkbirdDictionary,
+  undefined,
+  SkbirdConfigStoreInstance,
+  SkbirdMeInject
+>
+
+export const SkbirdMePage: SlotComponent<SkbirdMePageProps> = (props) => {
+  const { t, useStore, useHydrated, getClient, media, openSettings } = props
+  const token = useStore((state) => state.token)
+  const hasHydrated = useHydrated()
 
   const [user, setUser] = useState<SkbirdUser | null>(null)
   const [stats, setStats] = useState<SkbirdUserStats | null>(null)
@@ -24,7 +53,7 @@ export function SkbirdMePage({ context, navigate }: PluginPageProps) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const client = getSkbirdClient()
+    const client = getClient()
     if (!hasHydrated || !client) return
     let cancelled = false
     client
@@ -54,7 +83,7 @@ export function SkbirdMePage({ context, navigate }: PluginPageProps) {
     return () => {
       cancelled = true
     }
-  }, [hasHydrated, token, t])
+  }, [hasHydrated, token, t, getClient])
 
   if (hasHydrated && !token) {
     return (
@@ -63,7 +92,7 @@ export function SkbirdMePage({ context, navigate }: PluginPageProps) {
           <EmptyHeader>
             <EmptyTitle>{t("skbird.noToken")}</EmptyTitle>
           </EmptyHeader>
-          <Button onClick={() => navigate("settings")}>{t("skbird.goSettings")}</Button>
+          <Button onClick={() => openSettings()}>{t("skbird.goSettings")}</Button>
         </Empty>
       </div>
     )
@@ -76,7 +105,7 @@ export function SkbirdMePage({ context, navigate }: PluginPageProps) {
           <EmptyHeader>
             <EmptyTitle>{error}</EmptyTitle>
           </EmptyHeader>
-          <Button variant="outline" onClick={() => navigate("settings")}>
+          <Button variant="outline" onClick={() => openSettings()}>
             {t("skbird.goSettings")}
           </Button>
         </Empty>
@@ -97,7 +126,8 @@ export function SkbirdMePage({ context, navigate }: PluginPageProps) {
             <>
               {user.avatarUrl ? (
                 <SkbirdImage
-                  context={context}
+                  media={media}
+                  t={t}
                   url={skbirdImageUrl(user.avatarUrl, { w: 100, h: 100 })}
                   alt={user.nickname}
                   className="size-14 rounded-full object-cover"

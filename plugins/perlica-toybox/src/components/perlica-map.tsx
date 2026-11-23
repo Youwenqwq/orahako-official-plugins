@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import type { Circle, CircleMarker, DivIcon, Map as LeafletMap, Marker, Polygon } from "leaflet"
 import { gcj02ToWgs84, isUsableLatLng, wgs84ToGcj02 } from "../extras/geo"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
-import { PERLICA_PLUGIN_ID } from "../constants"
-import { cn } from "@orahako/plugin-ui/components"
+import { cn } from "@orahako/ui-primitives"
+import type { PerlicaTranslator } from "../i18n"
 import { addAmapTileLayer, type Leaflet } from "./perlica-map-tiles"
 
 export interface PerlicaMapCenter {
@@ -48,6 +47,7 @@ export interface PerlicaMapProps {
   showZoomControl?: boolean
   onSelect: (center: PerlicaMapCenter) => void
   onSelectMachine: (machineNO: string) => void
+  t: PerlicaTranslator
 }
 
 type PointKind = "park" | "station" | "remand"
@@ -237,8 +237,8 @@ export function PerlicaMap({
   showZoomControl = true,
   onSelect,
   onSelectMachine,
+  t,
 }: PerlicaMapProps) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
   const containerRef = useRef<HTMLDivElement>(null)
   const initialCenterRef = useRef(center)
   const machineMarkersRef = useRef<Map<string, CircleMarker>>(new Map())

@@ -1,4 +1,4 @@
-import type { PluginKeyValueStorage } from "@orahako/plugin-sdk"
+import type { PluginKeyValueStorage } from "@orahako/sdk"
 import type {
   PerlicaCoords,
   PerlicaGeoArea,

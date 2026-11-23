@@ -1,14 +1,27 @@
 import { describe, expect, it, vi } from "vitest"
-import type { HttpRequest, HttpResponse, PluginHttpService } from "@orahako/plugin-sdk"
+import type { HttpRequest, HttpResponse, PluginHttpService } from "@orahako/sdk"
 import { fetchImageBlob } from "./http"
 
+const EMPTY_ACTIVITY = {
+  active: [],
+  history: [],
+  session: null,
+  revision: 0,
+}
+
 function fakeHttp(send: (request: HttpRequest) => Promise<HttpResponse>): PluginHttpService {
+  const activityState = {
+    getSnapshot: () => EMPTY_ACTIVITY,
+    subscribe: () => () => {},
+  }
   return {
     send,
     activity: {
-      getSnapshot: () => ({ active: [], history: [], session: null, revision: 0 }),
-      subscribe: () => () => {},
+      ...activityState,
+      state: activityState,
+      beginRequest: () => () => {},
       registerLabeler: () => () => {},
+      registerClassifier: () => () => {},
     },
   }
 }

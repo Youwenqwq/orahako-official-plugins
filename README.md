@@ -1,124 +1,72 @@
 # Orahako Official Plugins
 
-Private build workspace for the developer-maintained Orahako plugins. It holds
-plugin source, tests, and packaging automation. It does **not** serve public
-marketplace metadata, and its releases are not public distribution.
+Source, tests, and packaging for developer-maintained Orahako plugins. All
+plugins target **API v1** and restart their release lines at **1.0.0**.
 
-## Status and boundaries
-
-- This repository is private. GitHub Releases here are internal builds for
-  maintainers and testers.
-- Public plugin distribution stays in the main `Youwenqwq/ysu-client`
-  repository and at <https://ysu.welain.com/updates/plugins.json>. Nothing in
-  this repository changes the public index, ZIP URLs, hashes, sizes, or publish
-  timestamps.
-- Marketplace metadata generation lives in the separate private
-  `orahako-plugin-registry` repository.
-- The public SDK (`@orahako/plugin-sdk`), UI kit (`@orahako/plugin-ui`) and
-  plugin templates (`packages/plugin-template`, `packages/plugin-shell-template`)
-  live in the host repository. This repository only builds the
-  developer-maintained plugins against the pinned host checkout.
-- There is no community crawler, topic bot, or npm SDK publication.
+The public marketplace is served from
+[`Youwenqwq/orahako-plugin-registry`](https://github.com/Youwenqwq/orahako-plugin-registry)
+through GitHub Raw. This repository does not serve the marketplace index and
+GitHub Release asset URLs are not used as `zipUrl`: browser downloads require
+the CORS contract provided by GitHub Raw.
 
 ## Plugins
 
-| Directory | Plugin id | Version | Kind |
+| Directory | Plugin ID | Version | Kind |
 | --- | --- | --- | --- |
-| `plugins/perlica-toybox` | `community.perlica-toybox` | 1.3.0 | feature |
-| `plugins/skbird` | `orahako.skbird` | 1.2.0 | feature |
-| `plugins/theme-arknights` | `community.theme.arknights` | 1.0.1 | theme |
-| `plugins/theme-yuna` | `community.theme.yuna` | 1.0.1 | theme |
+| `plugins/perlica-toybox` | `community.perlica-toybox` | 1.0.0 | feature |
+| `plugins/skbird` | `orahako.skbird` | 1.0.0 | feature |
+| `plugins/theme-arknights` | `community.theme.arknights` | 1.0.0 | theme |
+| `plugins/theme-yuna` | `community.theme.yuna` | 1.0.0 | theme |
 | `plugins/zmu-provider` | `zmu.provider` | 1.0.0 | provider |
-
-All manifests target API 2 (`apiVersion: 2`). API 1 ZIPs are intentionally
-incompatible with the current host and are rejected; published versions are
-immutable, so bump the manifest version instead of rebuilding or editing a
-released one.
 
 ## Layout
 
 ```text
-plugins/<plugin>/          Plugin sources, tests, and manifest.json
-toolchain/ysu-client/      Pinned host submodule (build script + SDK packages)
-scripts/plugins.mjs        Plugin discovery shared by build and release scripts
-scripts/build-plugins.mjs  Pack one or all plugins through the host packer
+plugins/<plugin>/                 Source, tests, manifest.json, optional assets
+toolchain/ysu-client/             Pinned host submodule and packer
+scripts/plugins.mjs               Plugin discovery and artifact paths
+scripts/build-plugins.mjs         Pack one or all plugins
 scripts/validate-release-tag.mjs  Validate <plugin-id>@<version> tags
-artifacts/                 Generated ZIPs (gitignored)
+artifacts/                        Generated ZIPs (gitignored)
 ```
 
-Host integration is resolved from the pinned toolchain, never from a checkout
-of a dirty working tree. The `@orahako/*` and `@/` aliases in `vitest.config.ts`
-point at `toolchain/ysu-client`, so the existing host-integration tests run
-against the host surface that produced the current artifacts. Because the root
-workspace links `plugin-sdk` and `plugin-ui` from that submodule, update the
-submodule pin and refresh `pnpm-lock.yaml` together.
+The pinned toolchain supplies the current `@orahako/sdk`,
+`@orahako/academic-sdk`, `@orahako/ui-primitives`, and `scripts/plugin.ts`.
+Update the submodule pin and refresh `pnpm-lock.yaml` together. Do not import
+host-private modules or the removed `plugin-sdk` / `plugin-ui` packages.
 
-Set `ORAHAKO_TOOLCHAIN` to an absolute path to run the build and tests against a
-different host checkout:
+Set `ORAHAKO_TOOLCHAIN` to an absolute host checkout for local development:
 
 ```sh
-ORAHAKO_TOOLCHAIN=/home/me/ysu-client pnpm build
 ORAHAKO_TOOLCHAIN=/home/me/ysu-client pnpm test
+ORAHAKO_TOOLCHAIN=/home/me/ysu-client pnpm build
 ```
 
-`scripts/plugins.mjs` and `vitest.config.ts` both honor the override. The pnpm
-workspace still links SDK/UI packages from `toolchain/ysu-client`, so install
-dependencies in that checkout and keep the override's public SDK surface
-compatible with the pins; an override does not rewrite `pnpm-lock.yaml`.
+The Vitest aliases and build script honor this override. The pnpm workspace
+still links public packages from `toolchain/ysu-client`, so the submodule must
+contain the same package layout.
 
-## Public plugin services
+## Public contracts
 
-Plugins consume the host only through public contracts:
+External packages share only the modules listed by `PLATFORM_MODULES`: React,
+React DOM, `sonner`, `@orahako/sdk`, and `@orahako/ui-primitives`.
+`@orahako/academic-sdk` may be bundled into a Provider ZIP but is not a shared
+host module. Other runtime dependencies are bundled by esbuild.
 
-- `@orahako/plugin-sdk` subpaths: `runtime`, `composition`, `manifest`,
-  `academic`, `ui`, `slots`, `i18n`, `services`, `session`,
-  `provider-runtime`, `query`, `navigation`, `events`, `providers`,
-  `provider-base`, `provider-capabilities`, `provider-errors`,
-  `crypto`, `market`, `installer`, `http`, `kernel`, `mfa`.
-- `@orahako/plugin-ui` subpaths and `@orahako/academic` for shared UI and
-  academic components.
-- The scoped `PluginContext` services: `ui`, `slots`, `settings`,
-  `notifications`, `i18n`, `providers`, `session`, `provider`, `query`,
-  `navigation`, `plugins`, `storage`, `http` (including read-only
-  `http.activity`), `native` (versioned capabilities), `assets` and `mfa`.
+Plugins use the declarative `definePlugin({ manifest, inject, apply })` form.
+UI registrations receive derived Props from the host renderer; they do not read
+`ctx`, business React contexts, or legacy UI stores. Dictionaries use
+`defineDictionary`, stores use scoped `defineStore` factories, and disposers are
+bound to the plugin scope. Provider plugins register a `SchoolProvider` factory
+through `ctx.providers.registerProvider`.
 
-There is no `@orahako/plugin-sdk/host` entry point and no official-only private
-API. External packages may not import `@/` host modules; the host rejects bare
-imports outside its shared module table and resolves only package-relative
-imports inside a ZIP. An external package can declare `provides` in its manifest
-to expose a new root service to other plugins and `inject` to consume one;
-replacing a core service that the host composition already provides requires a
-host composition change, not a marketplace install. Notifications use open
-channel strings, network activity is read-only (no URLs), and native access is
-limited to capabilities compiled into the host.
-
-## Native capabilities
-
-Plugins that use Android capabilities declare them in `manifest.json`, for
-example:
-
-```json
-{
-  "nativeCapabilities": ["native.geolocation@1"]
-}
-```
-
-The host installs a package only when every declared capability is enabled by
-the app's build composition (`assets/native-companion.json`). A market release
-may also declare `nativeCapabilities`; the host filters releases whose declared
-capabilities are unavailable. A ZIP cannot add Kotlin code or Gradle modules: a
-new native capability requires a new host build with a companion module, a
-capability factory and a composition entry. Declaring a capability never grants
-permission by itself; call `ctx.native.capabilities.has()` and handle
-unavailable/denied results.
-
-## Requirements
-
-- Node.js 24 or newer
-- pnpm 12 (pinned by `packageManager`)
-- Git submodule support
+Every manifest has `apiVersion: 1`, `version: "1.0.0"`, and
+`entry: "dist/index.js"`. Native capabilities must be declared explicitly; a
+ZIP cannot add Android code, modules, permissions, receivers, or widgets.
 
 ## Setup
+
+Requires Node.js 24+, pnpm 12, and Git submodule support:
 
 ```sh
 git submodule update --init --recursive
@@ -126,74 +74,54 @@ pnpm --dir toolchain/ysu-client install --frozen-lockfile
 pnpm install
 ```
 
-The root workspace links `@orahako/plugin-sdk` and `@orahako/plugin-ui` from the
-pinned toolchain for `plugins/perlica-toybox`. Non-host runtime dependencies
-such as `leaflet`, `html5-qrcode`, `lucide-react`, `zustand`, `sonner`, and
-`react` are installed by the root package so plugins without their own
-`package.json` resolve them while packing.
-
-## Test
+## Test and build
 
 ```sh
-pnpm test        # one run
-pnpm test:watch  # watch mode
-```
-
-Tests include a host-integration case that constructs `PluginRuntime` and the UI
-registry through `@/` imports, plus the plugin-level unit tests.
-
-## Build
-
-```sh
+pnpm test
 pnpm build                          # all five plugins
 pnpm build:plugin -- orahako.skbird # one plugin
 ```
 
-Both commands invoke the pinned toolchain's `scripts/plugin.ts pack` command and
-write ZIPs to `artifacts/<plugin-id>-<version>.zip`. A full build clears
-`artifacts/` first; a targeted build leaves other artifacts alone. The plugin
-packer also writes each plugin's `dist/` directory next to its sources; both
-`artifacts/` and `plugins/*/dist/` are gitignored.
+Builds invoke the pinned host packer and write
+`artifacts/<plugin-id>-<version>.zip`. A full build clears `artifacts/` first;
+a targeted build preserves unrelated artifacts. The packer emits ESM, bundles
+non-shared dependencies, compiles plugin Tailwind utilities, validates the ZIP,
+and prints its exact size and SHA-256.
 
-The packer validates the manifest (`apiVersion` must be `2`), bundles the entry
-as ESM while externalizing host-shared modules, and, when the plugin uses
-Tailwind utilities, compiles them into `dist/tailwind.css` and appends it to the
-packaged `manifest.styles`. Styles are therefore owned by the plugin ZIP rather
-than the host stylesheet. It prints the ZIP path, byte size and SHA-256; the
-market index must record exactly that hash and size.
+## Publishing
 
-Builds require the toolchain dependencies to be installed because the packer
-uses the host's esbuild, PostCSS, Tailwind, and manifest validator.
+GitHub Releases preserve tagged builds and checksums for maintainers. Public
+installation uses the reviewed bytes committed to the registry:
 
-## Releases
+1. Build the plugin and copy its ZIP without modification to
+   `orahako-plugin-registry/dist/plugins/<id>/<version>.zip`.
+2. Update the corresponding registry metadata, including `apiVersion: 1`, the
+   GitHub Raw `zipUrl`, size, SHA-256, and `publishedAt`.
+3. In the registry, run `pnpm generate && pnpm validate`, then commit metadata,
+   generated `dist/plugins.json`, and the ZIP together.
+4. After the registry reaches `main`, clients read the new index and ZIPs
+   directly from `raw.githubusercontent.com`.
 
-Releases are tag-driven:
+A published `<id>@<version>` is immutable. Never replace its registry asset;
+bump the version for changed code.
 
-```sh
-git tag community.theme.yuna@1.0.1
-git push origin community.theme.yuna@1.0.1
-```
-
-The release workflow requires the tag to be exactly
-`<plugin-id>@<version>` and to match one plugin manifest. It builds only that
-plugin, attaches the ZIP to a GitHub Release, and records the artifact SHA-256
-in the release notes. A mismatched or unknown tag fails before building. The
-validator also fails closed if the public market cannot be reached or already
-contains the same `id@version`; rebuilds never replace a published version.
-The same checks can be run locally:
+Tags in this repository use `<plugin-id>@<version>` and must exactly match one
+manifest:
 
 ```sh
-pnpm validate:tag -- community.theme.yuna@1.0.1
+pnpm validate:tag -- orahako.skbird@1.0.0
+git tag orahako.skbird@1.0.0
+git push origin orahako.skbird@1.0.0
 ```
 
-Because this repository is private, these Releases are internal only. Public
-users continue to install from the ZIPs distributed by the main website. Public
-object/CDN delivery and marketplace metadata publication are a later phase.
+The tag workflow checks that the version is absent from the public registry,
+builds the tagged plugin, and creates a GitHub Release containing the ZIP and
+SHA-256. Registry publication remains a separate reviewed commit so the exact
+public bytes are validated offline before release.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes and pull requests. It checks out the
-pinned submodule, installs both the toolchain and root workspace dependencies,
-runs `pnpm test`, builds all ZIPs, and uploads them as the `plugin-zips` build
-artifact. Workflows request only the permissions they need: `contents: read` for
-CI and `contents: write` for releases.
+`.github/workflows/ci.yml` checks out the pinned submodule, installs both
+workspaces, runs all plugin tests, builds every ZIP, and uploads the artifacts.
+`.github/workflows/release-plugin.yml` runs only for matching tags and requests
+`contents: write`; CI requests only `contents: read`.

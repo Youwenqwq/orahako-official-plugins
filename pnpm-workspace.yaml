@@ -1,7 +1,6 @@
 packages:
   - "plugins/*"
-  # Host packages come from the pinned toolchain checkout. Only the SDK
-  # packages are linked; toolchain/packages/perlica-toybox must stay out of this
-  # workspace because the import in plugins/perlica-toybox owns that package name.
-  - "toolchain/ysu-client/packages/plugin-sdk"
-  - "toolchain/ysu-client/packages/plugin-ui"
+  # Public host contracts come from the pinned toolchain checkout.
+  - "toolchain/ysu-client/packages/core/sdk"
+  - "toolchain/ysu-client/packages/core/ui-primitives"
+  - "toolchain/ysu-client/packages/edu/sdk"

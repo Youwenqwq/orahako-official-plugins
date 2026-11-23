@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import Link from "next/link"
 import {
   ArrowRight,
   Bike,
@@ -11,13 +10,15 @@ import {
   RefreshCw,
   ScanLine,
   Search,
-  Settings,
   TriangleAlert,
   X,
 } from "lucide-react"
-import { useMobileHeaderRight } from "@orahako/plugin-ui/stores"
 import { toast } from "sonner"
-import { pluginPageHref, type PluginPageProps } from "@orahako/plugin-sdk"
+import type {
+  DerivedComponentProps,
+  ObservableSource,
+  RouteLocation,
+} from "@orahako/sdk"
 import { PerlicaAccount } from "./components/perlica-account"
 import { PerlicaActiveRide } from "./components/perlica-active-ride"
 import { PerlicaHistory } from "./components/perlica-history"
@@ -25,37 +26,40 @@ import { PerlicaMachineDetail } from "./components/perlica-machine-detail"
 import { PerlicaMap } from "./components/perlica-map"
 import { PerlicaNearbyList } from "./components/perlica-nearby-list"
 import { PerlicaScanner } from "./components/perlica-scanner"
-import { PERLICA_PLUGIN_ID, PERLICA_PAGE_INDEX, PERLICA_PAGE_SETTINGS } from "./constants"
 import { isPerlicaTab, perlicaTab, type PerlicaTab } from "./extras/app-nav"
-import { Alert, AlertDescription, AlertTitle } from "@orahako/plugin-ui/components"
-import { Button } from "@orahako/plugin-ui/components"
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@orahako/plugin-ui/components"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@orahako/plugin-ui/components"
-import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
   Drawer,
   DrawerClose,
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
   DrawerTitle,
-} from "@orahako/plugin-ui/components"
-import { Skeleton } from "@orahako/plugin-ui/components"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@orahako/plugin-ui/components"
-import { ToggleGroup, ToggleGroupItem } from "@orahako/plugin-ui/components"
-import { PerlicaError } from "./extras/client"
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  Skeleton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  ToggleGroup,
+  ToggleGroupItem,
+  cn,
+} from "@orahako/ui-primitives"
+import { PerlicaError, type PerlicaClient, type PerlicaConfig } from "./extras/client"
+import type { PerlicaSnapshotCache } from "./extras/cache"
 import { parsePerlicaCode } from "./extras/scan"
-import { usePerlicaRuntime, usePerlicaStore } from "./runtime"
+import type { PerlicaStoreInstance } from "./extras/store"
 import type {
   PerlicaCoords,
   PerlicaGeoArea,
@@ -67,8 +71,31 @@ import type {
   PerlicaStation,
   PerlicaUserInfo,
 } from "./extras/types"
-import { usePluginTranslation } from "@orahako/plugin-ui/plugin"
-import { cn } from "@orahako/plugin-ui/components"
+import type { PerlicaDictionary } from "./i18n"
+
+export interface PerlicaPageInject {
+  readonly hooks: {
+    readonly location: ObservableSource<RouteLocation>
+    readonly hydrated: ObservableSource<boolean>
+    readonly refreshRequests: ObservableSource<number>
+    readonly refreshing: ObservableSource<boolean>
+  }
+  readonly navigate: (tab: PerlicaTab) => void
+  readonly openSettings: () => void
+  readonly setRefreshing: (value: boolean) => void
+  readonly createClient: (config: PerlicaConfig) => PerlicaClient
+  readonly readSnapshot: PerlicaSnapshotCache["read"]
+  readonly writeSnapshot: PerlicaSnapshotCache["write"]
+  readonly locate: () => Promise<PerlicaCoords>
+}
+
+export type PerlicaPageProps = DerivedComponentProps<
+  Record<string, never>,
+  PerlicaDictionary,
+  undefined,
+  PerlicaStoreInstance,
+  PerlicaPageInject
+>
 
 const RADII = [300, 1000, 3000, 5000, 10000]
 const PAGE_SIZE = 10
@@ -89,26 +116,43 @@ function safeServiceMessage(error: PerlicaError) {
   )
 }
 
-export function PerlicaPage({ params, navigate }: PluginPageProps) {
-  const { t } = usePluginTranslation(PERLICA_PLUGIN_ID)
-  const runtime = usePerlicaRuntime()
-  const token = usePerlicaStore((state) => state.token)
-  const accountId = usePerlicaStore((state) => state.accountId)
-  const hasHydrated = usePerlicaStore((state) => state.hasHydrated)
-  const center = usePerlicaStore((state) => state.center)
-  const locationConfirmed = usePerlicaStore((state) => state.locationConfirmed)
-  const radius = usePerlicaStore((state) => state.radius)
-  const setCenter = usePerlicaStore((state) => state.setCenter)
-  const setRadius = usePerlicaStore((state) => state.setRadius)
+export function PerlicaPage(props: PerlicaPageProps) {
+  const { t, locale } = props
+  const location = props.useLocation()
+  const hasHydrated = props.useHydrated()
+  const refreshRequests = props.useRefreshRequests()
+  const token = props.useStore((state) => state.token)
+  const accountId = props.useStore((state) => state.accountId)
+  const adAccountId = props.useStore((state) => state.adAccountId)
+  const center = props.useStore((state) => state.center)
+  const locationConfirmed = props.useStore((state) => state.locationConfirmed)
+  const radius = props.useStore((state) => state.radius)
+  const { setCenter, setRadius } = props.actions
+  const {
+    navigate,
+    openSettings,
+    setRefreshing,
+    createClient,
+    readSnapshot,
+    writeSnapshot,
+    locate,
+  } = props
 
   const session = useMemo(() => ({ accountId, token }), [accountId, token])
   const client = useMemo(
-    () => (token && accountId ? runtime.getClient() : null),
-    [accountId, runtime, token]
+    () =>
+      token && accountId
+        ? createClient({
+            token,
+            accountId,
+            adAccountId,
+          })
+        : null,
+    [accountId, adAccountId, createClient, token]
   )
-  const activeTab = perlicaTab(params)
+  const activeTab = perlicaTab(new URLSearchParams(location.search))
   const setActiveTab = useCallback(
-    (tab: PerlicaTab) => navigate(PERLICA_PAGE_INDEX, { tab }),
+    (tab: PerlicaTab) => navigate(tab),
     [navigate]
   )
   const [scannerOpen, setScannerOpen] = useState(false)
@@ -188,9 +232,9 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
       }
       setOrder(next)
       setOrderLoaded(true)
-      void runtime.cache.write(session.accountId, { order: next, orderAt: Date.now() })
+      void writeSnapshot(session.accountId, { order: next, orderAt: Date.now() })
     },
-    [isSessionActive, runtime, session.accountId]
+    [isSessionActive, session.accountId, writeSnapshot]
   )
 
   const showOptimisticOrder = useCallback(
@@ -199,11 +243,11 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
       optimisticOrderRef.current = { order: next, until: Date.now() + 15_000 }
       setOrder(next)
       setOrderLoaded(true)
-      void runtime.cache.write(session.accountId, { order: next, orderAt: Date.now() })
+      void writeSnapshot(session.accountId, { order: next, orderAt: Date.now() })
       setSelectedCode("")
       setActiveTab("ride")
     },
-    [isSessionActive, runtime, session.accountId, setActiveTab]
+    [isSessionActive, session.accountId, setActiveTab, writeSnapshot]
   )
 
   const loadNearby = useCallback(
@@ -223,7 +267,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         setMachines(result)
         setMapError(false)
         loadedAtRef.current.machines = Date.now()
-        void runtime.cache.write(session.accountId, {
+        void writeSnapshot(session.accountId, {
           machines: result,
           machinesAt: Date.now(),
           center: targetCenter,
@@ -256,12 +300,12 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (!isSessionActive() || request !== geoRequestRef.current) return
         setGeoArea(result)
         loadedAtRef.current.geo = Date.now()
-        void runtime.cache.write(session.accountId, { geoArea: result, geoAreaAt: Date.now() })
+        void writeSnapshot(session.accountId, { geoArea: result, geoAreaAt: Date.now() })
       } catch (error) {
         if (isSessionActive() && request === geoRequestRef.current) reportError(error)
       }
     },
-    [center, client, isSessionActive, reportError, runtime, session.accountId]
+    [center, client, isSessionActive, reportError, session.accountId, writeSnapshot]
   )
 
   const loadMapPoints = useCallback(
@@ -295,12 +339,12 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (!isSessionActive()) return
         setUser(result)
         loadedAtRef.current.user = Date.now()
-        void runtime.cache.write(session.accountId, { user: result, userAt: Date.now() })
+        void writeSnapshot(session.accountId, { user: result, userAt: Date.now() })
       } catch (error) {
         if (isSessionActive()) reportError(error)
       }
     },
-    [client, isSessionActive, reportError, runtime, session.accountId]
+    [client, isSessionActive, reportError, session.accountId, writeSnapshot]
   )
 
   const loadCards = useCallback(
@@ -317,12 +361,12 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (!isSessionActive()) return
         setCards(result)
         loadedAtRef.current.cards = Date.now()
-        void runtime.cache.write(session.accountId, { cards: result, cardsAt: Date.now() })
+        void writeSnapshot(session.accountId, { cards: result, cardsAt: Date.now() })
       } catch (error) {
         if (isSessionActive()) reportError(error)
       }
     },
-    [center, client, isSessionActive, reportError, runtime, session.accountId]
+    [center, client, isSessionActive, reportError, session.accountId, writeSnapshot]
   )
 
   const refreshMapAt = useCallback(
@@ -417,7 +461,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         setLogs((previous) => {
           if (!isSessionActive()) return previous
           const next = append ? [...previous, ...result] : result
-          void runtime.cache.write(session.accountId, { logs: next, logsAt: Date.now() })
+          void writeSnapshot(session.accountId, { logs: next, logsAt: Date.now() })
           return next
         })
         setLogPage(page)
@@ -429,7 +473,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (isSessionActive() && request === logsRequestRef.current) setLogsLoading(false)
       }
     },
-    [client, isSessionActive, reportError, runtime, session.accountId]
+    [client, isSessionActive, reportError, session.accountId, writeSnapshot]
   )
 
   const refreshAll = useCallback(async () => {
@@ -472,7 +516,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
     loadedAtRef.current = { machines: 0, user: 0, cards: 0, logs: 0, geo: 0, unread: 0 }
 
     void (async () => {
-      const snapshot = await runtime.cache.read(session.accountId)
+      const snapshot = await readSnapshot(session.accountId)
       if (!isSessionActive()) return
       if (snapshot) {
         setMachines(snapshot.machines)
@@ -519,12 +563,12 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
     loadNearby,
     loadOrder,
     reportError,
-    runtime,
+    readSnapshot,
     session,
   ])
 
   useEffect(() => {
-    const deepLinkedCode = parsePerlicaCode(params.toString())
+    const deepLinkedCode = parsePerlicaCode(location.search)
     if (deepLinkedCode && /^\d{8,9}$/.test(deepLinkedCode)) {
       setSelectedCode(deepLinkedCode)
       setManualCode(deepLinkedCode)
@@ -546,7 +590,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
       if (locating || !isSessionActive()) return null
       setLocating(true)
       try {
-        const coords = await runtime.locate()
+        const coords = await locate()
         if (!isSessionActive()) return null
         setCenter(coords)
         if (refreshMap) toast.success(t("perlica.locationUpdated"))
@@ -558,7 +602,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
         if (isSessionActive()) setLocating(false)
       }
     },
-    [isSessionActive, locating, runtime, setCenter, t]
+    [isSessionActive, locate, locating, setCenter, t]
   )
 
   const handleCenterSelect = useCallback(
@@ -606,30 +650,18 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
     [center, refreshMapAt, setRadius]
   )
 
-  useMobileHeaderRight(
-    <div className="flex items-center gap-0.5">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => void refreshAll()}
-        disabled={refreshing}
-        aria-label={t("perlica.refresh")}
-      >
-        <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => navigate(PERLICA_PAGE_SETTINGS, { tab: activeTab })}
-        aria-label={t("perlica.settingsTitle")}
-      >
-        <Settings className="size-4" />
-      </Button>
-    </div>,
-    [activeTab, navigate, refreshAll, refreshing, t]
-  )
+  const lastRefreshRequestRef = useRef(refreshRequests)
+
+  useEffect(() => {
+    if (refreshRequests === lastRefreshRequestRef.current) return
+    lastRefreshRequestRef.current = refreshRequests
+    void refreshAll()
+  }, [refreshAll, refreshRequests])
+
+  useEffect(() => {
+    setRefreshing(refreshing)
+    return () => setRefreshing(false)
+  }, [refreshing, setRefreshing])
 
   const mapMachines = useMemo(
     () =>
@@ -680,10 +712,8 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
             <EmptyTitle>{t("perlica.noToken")}</EmptyTitle>
             <EmptyDescription>{t("perlica.noTokenHint")}</EmptyDescription>
           </EmptyHeader>
-          <Button asChild>
-            <Link href={pluginPageHref(PERLICA_PLUGIN_ID, PERLICA_PAGE_SETTINGS)}>
-              {t("perlica.goSettings")}
-            </Link>
+          <Button type="button" onClick={openSettings}>
+            {t("perlica.goSettings")}
           </Button>
         </Empty>
       </div>
@@ -745,6 +775,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
               remandPoints={remandPoints}
               selectedMachineNO={selectedMachine?.machineNo || undefined}
               onSelect={handleCenterSelect}
+              t={t}
               onSelectMachine={(machineNo) => {
                 const machine = machines.find(
                   (item) => item.machineNo === machineNo || item.userCode === machineNo
@@ -901,6 +932,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
                 onOrderChange={applyOrder}
                 onRequestLocation={() => requestLocation(false)}
                 reportError={reportError}
+                t={t}
               />
             ) : (
               <Empty className="min-h-[55dvh] py-12">
@@ -947,6 +979,8 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
             hasMore={hasMoreLogs}
             onLoadMore={() => void loadLogs(logPage + 1, true, true)}
             reportError={reportError}
+            t={t}
+            locale={locale}
           />
         </TabsContent>
 
@@ -961,6 +995,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
             cards={cards}
             unreadCount={unreadCount}
             loading={accountLoading}
+            t={t}
           />
         </TabsContent>
       </Tabs>
@@ -1046,6 +1081,7 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
                 machines={machines}
                 selectedCode={selectedCode}
                 loading={mapLoading}
+                t={t}
                 onSelect={(code) => {
                   setListOpen(false)
                   selectCode(code)
@@ -1114,12 +1150,18 @@ export function PerlicaPage({ params, navigate }: PluginPageProps) {
                 setActiveTab("ride")
               }}
               reportError={reportError}
+              t={t}
             />
           </div>
         </DrawerContent>
       </Drawer>
 
-      <PerlicaScanner open={scannerOpen} onOpenChange={setScannerOpen} onCode={selectCode} />
+      <PerlicaScanner
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onCode={selectCode}
+        t={t}
+      />
     </div>
   )
 }

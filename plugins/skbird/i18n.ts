@@ -1,10 +1,10 @@
-import type { PluginTranslations } from "@orahako/plugin-sdk"
+import { defineDictionary } from "@orahako/sdk"
 
 /**
  * Skbird copy lifted from the host dictionary at port time. The plugin owns
  * these strings end to end; host dictionaries are never patched.
  */
-export const skbirdTranslations: PluginTranslations = {
+export const skbirdDictionary = defineDictionary({
   zh: {
     skbird: {
       nav: "森空鸟",
@@ -160,4 +160,6 @@ export const skbirdTranslations: PluginTranslations = {
       viewsCount: "{count} views",
     },
   },
-}
+})
+
+export type SkbirdDictionary = typeof skbirdDictionary

@@ -1,38 +1,37 @@
-"use client"
-
 import { useState } from "react"
 import { ThumbsUp } from "lucide-react"
-import type { PluginContext } from "@orahako/plugin-sdk"
-import { Badge } from "@orahako/plugin-ui/components"
-import { useTranslation } from "@orahako/plugin-ui/hooks"
+import type { Translator } from "@orahako/sdk"
+import { Badge } from "@orahako/ui-primitives"
 import { skbirdImageUrl } from "../client"
-import { getSkbirdClient } from "../store"
+import type { SkbirdDictionary } from "../i18n"
 import type { SkbirdComment } from "../types"
-import { SkbirdImage } from "./skbird-image"
+import { SkbirdImage, type SkbirdMediaAccess } from "./skbird-image"
 
 export function SkbirdCommentItem({
-  context,
+  media,
+  t,
   comment,
   threadId,
+  likeComment,
   depth = 0,
 }: {
-  context: PluginContext
+  media: SkbirdMediaAccess
+  t: Translator<SkbirdDictionary>
   comment: SkbirdComment
   threadId: string
+  likeComment: (threadId: string, commentId: string, action: 0 | 1) => Promise<void>
   depth?: number
 }) {
-  const { t } = useTranslation()
   const [likeHas, setLikeHas] = useState(comment.likeHas)
   const [likeCount, setLikeCount] = useState(comment.likeCount)
   const [pending, setPending] = useState(false)
 
   async function handleLike() {
-    const client = getSkbirdClient()
-    if (!client || pending) return
+    if (pending) return
     setPending(true)
     const next = !likeHas
     try {
-      await client.like(threadId, next ? 1 : 0, comment.commentId)
+      await likeComment(threadId, comment.commentId, next ? 1 : 0)
       setLikeHas(next)
       setLikeCount((c) => c + (next ? 1 : -1))
     } catch {
@@ -47,7 +46,8 @@ export function SkbirdCommentItem({
       <div className="flex gap-2.5">
         {comment.avatarUrl ? (
           <SkbirdImage
-            context={context}
+            media={media}
+            t={t}
             url={skbirdImageUrl(comment.avatarUrl, { w: 64, h: 64 })}
             alt={comment.nickname}
             className="mt-0.5 size-7 shrink-0 rounded-full object-cover"
@@ -85,10 +85,12 @@ export function SkbirdCommentItem({
         <div className="mt-3 flex flex-col gap-3">
           {comment.replies.map((r) => (
             <SkbirdCommentItem
-              context={context}
+              media={media}
+              t={t}
               key={r.commentId}
               comment={r}
               threadId={threadId}
+              likeComment={likeComment}
               depth={depth + 1}
             />
           ))}

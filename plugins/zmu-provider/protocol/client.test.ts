@@ -1,7 +1,8 @@
 import { createCipheriv } from "node:crypto"
 import { describe, expect, it, vi } from "vitest"
-import type { CookieJar, HttpRequest, HttpResponse } from "@orahako/plugin-sdk"
-import { ProviderErrorCode } from "@orahako/plugin-sdk/provider-errors"
+import type { HttpRequest, HttpResponse } from "@orahako/sdk"
+import type { CookieJar } from "@orahako/academic-sdk"
+import { ProviderErrorCode } from "@orahako/academic-sdk"
 import { createTestSession } from "../test-support"
 import { ZMUClient } from "./client"
 

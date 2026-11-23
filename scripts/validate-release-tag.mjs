@@ -34,7 +34,9 @@ if (plugin.id !== pluginId || plugin.version !== version) {
   process.exit(1)
 }
 
-const marketUrl = process.env.PLUGIN_MARKET_URL ?? "https://ysu.welain.com/updates/plugins.json"
+const marketUrl =
+  process.env.PLUGIN_MARKET_URL ??
+  "https://raw.githubusercontent.com/Youwenqwq/orahako-plugin-registry/main/dist/plugins.json"
 const response = await fetch(marketUrl, {
   cache: "no-store",
   signal: AbortSignal.timeout(30_000),

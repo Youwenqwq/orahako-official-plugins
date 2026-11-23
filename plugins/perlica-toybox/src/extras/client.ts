@@ -1,4 +1,4 @@
-import type { HttpResponse, PluginHttpService } from "@orahako/plugin-sdk"
+import type { HttpResponse, PluginHttpService } from "@orahako/sdk"
 import {
   toPerlicaCurrentOrder,
   toPerlicaGeoArea,

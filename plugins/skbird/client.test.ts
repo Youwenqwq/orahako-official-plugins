@@ -3,18 +3,31 @@ import type {
   HttpRequest,
   HttpResponse,
   PluginHttpService,
-} from "@orahako/plugin-sdk"
+} from "@orahako/sdk"
 import { makeSign, type SignEntry } from "./sign"
 import { SkbirdClient, SkbirdError, generateDeviceId, skbirdImageUrl } from "./client"
 
 const sendMock = vi.fn<(req: HttpRequest) => Promise<HttpResponse>>()
 
+const EMPTY_ACTIVITY = {
+  active: [],
+  history: [],
+  session: null,
+  revision: 0,
+}
+const activityState = {
+  getSnapshot: () => EMPTY_ACTIVITY,
+  subscribe: () => () => {},
+}
+
 const http: PluginHttpService = {
   send: sendMock,
   activity: {
-    getSnapshot: () => ({ active: [], history: [], session: null, revision: 0 }),
-    subscribe: () => () => {},
+    ...activityState,
+    state: activityState,
+    beginRequest: () => () => {},
     registerLabeler: () => () => {},
+    registerClassifier: () => () => {},
   },
 }
 
