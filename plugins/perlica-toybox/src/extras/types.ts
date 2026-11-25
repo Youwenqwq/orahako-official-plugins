@@ -245,7 +245,7 @@ function rawOptionalNumber(...values: unknown[]): number | null {
 }
 
 /** Naive service timestamps are China Standard Time, not the device's local zone. */
-function serviceTimestamp(value: unknown): number | null {
+export function toServiceTimestamp(value: unknown): number | null {
   if (typeof value === "number" || (typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value))) {
     const numeric = Number(value)
     if (!Number.isFinite(numeric)) return null
@@ -260,8 +260,8 @@ function serviceTimestamp(value: unknown): number | null {
 }
 
 function durationBetween(startTime: string, endTime: string): number | null {
-  const start = serviceTimestamp(startTime)
-  const end = serviceTimestamp(endTime)
+  const start = toServiceTimestamp(startTime)
+  const end = toServiceTimestamp(endTime)
   if (start === null || end === null || end < start) return null
   return Math.floor((end - start) / 1000)
 }
@@ -413,7 +413,7 @@ export function toPerlicaMachineStatus(data: unknown): PerlicaMachineStatus {
   const explicitOnline = rawOptionalBoolean(raw.online, raw.isOnline)
   const statusOnline =
     status.toLowerCase() === "online" ? true : status.toLowerCase() === "offline" ? false : null
-  const heartbeat = serviceTimestamp(
+  const heartbeat = toServiceTimestamp(
     rawString(raw.batDt, raw.heartbeatTime, raw.lastHeartbeat, raw.posDt)
   )
   const heartbeatAge = heartbeat === null ? null : Date.now() - heartbeat

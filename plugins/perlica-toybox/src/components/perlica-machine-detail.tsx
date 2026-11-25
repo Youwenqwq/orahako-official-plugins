@@ -39,6 +39,7 @@ export interface PerlicaMachineDetailProps {
   locationConfirmed: boolean
   currentOrder: PerlicaOrder | null
   onOrderChange: (order: PerlicaOrder | null) => void
+  onOrderUnconfirmed: () => void
   onBorrowSuccess: (order: PerlicaOrder) => void
   onRequestLocation: () => Promise<PerlicaCoords | null>
   onShowOrder: () => void
@@ -170,6 +171,7 @@ export function PerlicaMachineDetail({
   locationConfirmed,
   currentOrder,
   onOrderChange,
+  onOrderUnconfirmed,
   onBorrowSuccess,
   onRequestLocation,
   onShowOrder,
@@ -182,6 +184,7 @@ export function PerlicaMachineDetail({
   const resolveErrorReportedRef = useRef("")
   const mountedRef = useRef(true)
   const onOrderChangeRef = useRef(onOrderChange)
+  const onOrderUnconfirmedRef = useRef(onOrderUnconfirmed)
   const onBorrowSuccessRef = useRef(onBorrowSuccess)
   const reportErrorRef = useRef(reportError)
 
@@ -189,9 +192,17 @@ export function PerlicaMachineDetail({
     codeRef.current = normalizedCode
     machineRef.current = machine
     onOrderChangeRef.current = onOrderChange
+    onOrderUnconfirmedRef.current = onOrderUnconfirmed
     onBorrowSuccessRef.current = onBorrowSuccess
     reportErrorRef.current = reportError
-  }, [machine, normalizedCode, onBorrowSuccess, onOrderChange, reportError])
+  }, [
+    machine,
+    normalizedCode,
+    onBorrowSuccess,
+    onOrderChange,
+    onOrderUnconfirmed,
+    reportError,
+  ])
 
   const [status, setStatus] = useState<PerlicaMachineStatus | null>(null)
   const [fee, setFee] = useState<PerlicaMachineFee | null>(null)
@@ -288,6 +299,7 @@ export function PerlicaMachineDetail({
           codeRef.current === targetCode &&
           requestId === orderRequestRef.current
         ) {
+          onOrderUnconfirmedRef.current()
           reportErrorRef.current(error)
         }
         return null
@@ -457,7 +469,13 @@ export function PerlicaMachineDetail({
   }
 
   async function handleRing() {
-    if (ringLockRef.current || !normalizedCode || !ids.userCode || !hasConfirmedCoords) {
+    if (
+      ringLockRef.current ||
+      !normalizedCode ||
+      !ids.userCode ||
+      !ids.machineNo ||
+      !hasConfirmedCoords
+    ) {
       if (!hasConfirmedCoords) toast.error(t("perlica.locationRequired"))
       return
     }
@@ -715,7 +733,14 @@ export function PerlicaMachineDetail({
               variant="outline"
               className="h-14 min-w-0 flex-col gap-1 rounded-xl px-1 text-xs"
               onClick={() => void handleRing()}
-              disabled={ringing || preparing || unlocking || !hasConfirmedCoords || !ids.userCode}
+              disabled={
+                ringing ||
+                preparing ||
+                unlocking ||
+                !hasConfirmedCoords ||
+                !ids.userCode ||
+                !ids.machineNo
+              }
             >
               <BellRing data-icon="inline-start" />
               <span className="truncate">{ringing ? t("perlica.ringing") : t("perlica.ring")}</span>

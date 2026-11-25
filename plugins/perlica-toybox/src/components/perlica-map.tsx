@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { Circle, CircleMarker, DivIcon, Map as LeafletMap, Marker, Polygon } from "leaflet"
 import { gcj02ToWgs84, isUsableLatLng, wgs84ToGcj02 } from "../extras/geo"
+import { toServiceTimestamp } from "../extras/types"
 import { cn } from "@orahako/ui-primitives"
 import type { PerlicaTranslator } from "../i18n"
 import { addAmapTileLayer, type Leaflet } from "./perlica-map-tiles"
@@ -104,28 +105,19 @@ function pointKey(point: PerlicaMapPoint): string {
 }
 
 function updateTooltip(layer: Marker | CircleMarker, title: string) {
+  const content = document.createElement("span")
+  content.textContent = title
   if (layer.getTooltip()) {
-    layer.setTooltipContent(title)
+    layer.setTooltipContent(content)
   } else {
-    layer.bindTooltip(title, { direction: "top", offset: [0, -10] })
+    layer.bindTooltip(content, { direction: "top", offset: [0, -10] })
   }
 }
 
 function hasStalePosition(posDt: string | number | undefined, now: number): boolean {
   if (posDt === undefined || posDt === null || posDt === "") return false
-
-  let timestamp = Number.NaN
-  if (typeof posDt === "number" || posDt.trim() !== "") {
-    const numeric = Number(posDt)
-    if (Number.isFinite(numeric)) {
-      timestamp = Math.abs(numeric) < 1_000_000_000_000 ? numeric * 1000 : numeric
-    }
-  }
-  if (!Number.isFinite(timestamp) && typeof posDt === "string") {
-    timestamp = Date.parse(posDt.replace(" ", "T"))
-  }
-
-  return Number.isFinite(timestamp) && now - timestamp > STALE_POSITION_MS
+  const timestamp = toServiceTimestamp(posDt)
+  return timestamp !== null && now - timestamp > STALE_POSITION_MS
 }
 
 function countUsablePoints(points: PerlicaMapPoint[] | undefined): number {

@@ -75,7 +75,7 @@ export const perlicaDictionary = defineDictionary({
       battery: "剩余电量",
       surplusMileage: "预计续航（公里）",
       manualMachine: "手动查询车辆",
-      manualPlaceholder: "输入车辆 ID",
+      manualPlaceholder: "输入 8 位车身号",
       queryMachine: "查询车辆",
       querying: "查询中…",
       machineDetails: "车辆详情",
@@ -116,7 +116,7 @@ export const perlicaDictionary = defineDictionary({
       tabAccount: "我的",
       searchRadius: "搜索半径",
       scanCode: "扫码用车",
-      invalidBikeCode: "请输入有效的车辆 ID",
+      invalidBikeCode: "请输入 8 位车身号",
       machineResolveFailed: "无法在附近车辆中反查该 ID，请移动地图后重试或输入车身印刷的车辆 ID。",
       locationRequired: "默认坐标仅用于展示，请先定位或拖动地图确认位置后再操作车辆。",
       dualCodeHint: "输入车身印刷的车辆 ID，或直接扫码查询。",
@@ -269,6 +269,7 @@ export const perlicaDictionary = defineDictionary({
       scannerImageFailed: "无法识别图片，请更换清晰图片",
       scannerInvalidCode: "二维码中没有有效的车辆 ID",
       scannerChooseImage: "相册扫码",
+      scannerClose: "关闭扫码",
     },
   },
   en: {
@@ -343,7 +344,7 @@ export const perlicaDictionary = defineDictionary({
       battery: "Battery",
       surplusMileage: "Estimated range (km)",
       manualMachine: "Look up a bike",
-      manualPlaceholder: "Enter vehicle ID",
+      manualPlaceholder: "Enter 8-digit body code",
       queryMachine: "Check bike",
       querying: "Checking…",
       machineDetails: "Bike details",
@@ -385,7 +386,7 @@ export const perlicaDictionary = defineDictionary({
       tabAccount: "Account",
       searchRadius: "Search radius",
       scanCode: "Scan to ride",
-      invalidBikeCode: "Enter a valid vehicle ID",
+      invalidBikeCode: "Enter an 8-digit body code",
       machineResolveFailed:
         "Could not resolve this ID nearby. Move the map or enter the vehicle ID printed on the bike.",
       locationRequired:
@@ -546,6 +547,7 @@ export const perlicaDictionary = defineDictionary({
       scannerImageFailed: "Could not read this image. Choose a clearer photo.",
       scannerInvalidCode: "The QR code does not contain a valid vehicle ID",
       scannerChooseImage: "Choose image",
+      scannerClose: "Close scanner",
     },
   },
 })

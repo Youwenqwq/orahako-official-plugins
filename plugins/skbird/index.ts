@@ -8,7 +8,12 @@ import manifest from "./manifest.json"
 import { SkbirdClient, type SkbirdConfig } from "./client"
 import { fetchImageBlob } from "./http"
 import { skbirdDictionary } from "./i18n"
-import { createSkbirdFeedStateStore } from "./feed-state"
+import {
+  createSkbirdFeedStateStore,
+  type SkbirdFeedIdentity,
+  type SkbirdFeedSnapshot,
+} from "./feed-state"
+import { createSkbirdUnreadSync } from "./unread"
 import { skbirdConfigStore, type SkbirdConfigStoreInstance } from "./store"
 import type { SkbirdMediaAccess } from "./components/skbird-image"
 import {
@@ -52,9 +57,8 @@ export default definePlugin({
     const feedState = createSkbirdFeedStateStore()
 
     const getClient = (): SkbirdClient | null => {
-      const { token, deviceId, alias } = configStore.source.getSnapshot()
-      if (!token) return null
-      return new SkbirdClient(http, { token, deviceId, alias })
+      const config = configStore.source.getSnapshot()
+      return config.token ? new SkbirdClient(http, config) : null
     }
 
     const media: SkbirdMediaAccess = {
@@ -69,34 +73,11 @@ export default definePlugin({
       router.push({ pluginId: SKBIRD_PLUGIN_ID, pageId: page, params })
     }
 
-    let unreadRequest: Promise<void> | undefined
-    const refreshUnread = (): Promise<void> => {
-      if (unreadRequest) return unreadRequest
-      const config = configStore.source.getSnapshot()
-      const client = getClient()
-      if (!client) {
-        unread.set(0)
-        return Promise.resolve()
-      }
-      const request = client
-        .unreadNum()
-        .then((value) => {
-          const current = configStore.source.getSnapshot()
-          if (
-            current.token === config.token &&
-            current.deviceId === config.deviceId &&
-            current.alias === config.alias
-          ) {
-            unread.set(value.count + value.imCount)
-          }
-        })
-        .catch(() => {})
-      unreadRequest = request
-      void request.finally(() => {
-        if (unreadRequest === request) unreadRequest = undefined
-      })
-      return request
-    }
+    const refreshUnread = createSkbirdUnreadSync({
+      getConfig: () => configStore.source.getSnapshot(),
+      request: (config) => new SkbirdClient(http, config).unreadNum(),
+      publish: (count) => unread.set(count),
+    })
 
     const syncUnread = (): void => {
       if (!configStore.hydrated.getSnapshot()) return
@@ -127,8 +108,9 @@ export default definePlugin({
           media,
           pageHref,
           openPage,
-          readFeedState: () => feedState.read(),
-          writeFeedState: (snapshot) => feedState.write(snapshot),
+          readFeedState: (identity: SkbirdFeedIdentity) => feedState.read(identity),
+          writeFeedState: (identity: SkbirdFeedIdentity, snapshot: SkbirdFeedSnapshot) =>
+            feedState.write(identity, snapshot),
           refreshUnread,
         }),
       },
@@ -151,8 +133,12 @@ export default definePlugin({
           getClient,
           media,
           openSettings: () => openPage("settings"),
-          readThreadSnapshot: (id) =>
-            feedState.read()?.threads.find((thread) => thread.threadId === id),
+          readThreadSnapshot: (id) => {
+            const { token, deviceId, alias } = configStore.source.getSnapshot()
+            return feedState
+              .read({ token, deviceId, alias })
+              ?.threads.find((thread) => thread.threadId === id)
+          },
         }),
       },
       SkbirdThreadPage

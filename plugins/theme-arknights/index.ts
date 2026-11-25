@@ -4,7 +4,7 @@ import { arknightsThemeCss } from "./styles"
 export const manifest: PluginManifest = {
   id: "community.theme.arknights",
   name: "明日方舟 × 新粗野主义",
-  version: "1.0.0",
+  version: "1.0.1",
   apiVersion: PLUGIN_API_VERSION,
   minAppVersion: "0.16.0",
   kind: "theme",

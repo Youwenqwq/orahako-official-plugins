@@ -3,6 +3,7 @@
 import { Bike, ChevronRight, Clock3 } from "lucide-react"
 import { Badge, Skeleton, cn } from "@orahako/ui-primitives"
 import type { PerlicaMachine } from "../extras/types"
+import { toServiceTimestamp } from "../extras/types"
 import type { PerlicaTranslator } from "../i18n"
 
 interface Props {
@@ -17,13 +18,8 @@ const STALE_POSITION_MS = 6 * 60 * 60 * 1000
 
 function isStalePosition(value: unknown) {
   if (value === null || value === undefined || value === "") return false
-  const numeric = Number(value)
-  const timestamp = Number.isFinite(numeric)
-    ? numeric < 10_000_000_000
-      ? numeric * 1000
-      : numeric
-    : Date.parse(String(value))
-  return Number.isFinite(timestamp) && Date.now() - timestamp > STALE_POSITION_MS
+  const timestamp = toServiceTimestamp(value)
+  return timestamp !== null && Date.now() - timestamp > STALE_POSITION_MS
 }
 
 function NearbySkeleton() {

@@ -25,6 +25,7 @@ import {
 } from "../extras/fare"
 import { PARK_POINT_SEARCH_RADIUS_METERS, selectParkingPoints } from "../extras/parking"
 import type { PerlicaCoords, PerlicaOrder, PerlicaParkPoint } from "../extras/types"
+import { toServiceTimestamp } from "../extras/types"
 import type { PerlicaTranslator } from "../i18n"
 
 const VISIBLE_POLL_MS = 8_000
@@ -53,7 +54,9 @@ type ReturnCandidate = {
 export interface PerlicaActiveRideProps {
   client: PerlicaClient
   order: PerlicaOrder
+  orderConfirmed: boolean
   onOrderChange: (order: PerlicaOrder | null) => void
+  onOrderUnconfirmed: () => void
   onRequestLocation: () => Promise<PerlicaCoords | null>
   reportError: (error: unknown) => void
   t: PerlicaTranslator
@@ -67,19 +70,6 @@ function sameOrder(order: PerlicaOrder | null, candidate: ReturnCandidate): bool
   return (
     order !== null && order.orderNo === candidate.orderNo && order.userCode === candidate.userCode
   )
-}
-
-function startTimestamp(value: string): number | null {
-  const normalized = value.trim()
-  if (!normalized) return null
-
-  const numeric = Number(normalized)
-  if (Number.isFinite(numeric)) {
-    return Math.abs(numeric) < 1_000_000_000_000 ? numeric * 1000 : numeric
-  }
-
-  const parsed = Date.parse(normalized.replace(" ", "T"))
-  return Number.isFinite(parsed) ? parsed : null
 }
 
 function orderMoneyCents(order: PerlicaOrder): number {
@@ -170,7 +160,9 @@ function actionMessage(action: ActionState | null, t: PerlicaTranslator): string
 export function PerlicaActiveRide({
   client,
   order,
+  orderConfirmed,
   onOrderChange,
+  onOrderUnconfirmed,
   onRequestLocation,
   reportError,
   t,
@@ -182,7 +174,9 @@ export function PerlicaActiveRide({
 
   const mountedRef = useRef(false)
   const orderRef = useRef(order)
+  const orderConfirmedRef = useRef(orderConfirmed)
   const onOrderChangeRef = useRef(onOrderChange)
+  const onOrderUnconfirmedRef = useRef(onOrderUnconfirmed)
   const onRequestLocationRef = useRef(onRequestLocation)
   const reportErrorRef = useRef(reportError)
   const orderRequestRef = useRef(0)
@@ -191,13 +185,22 @@ export function PerlicaActiveRide({
 
   useEffect(() => {
     orderRef.current = order
+    orderConfirmedRef.current = orderConfirmed
     onOrderChangeRef.current = onOrderChange
+    onOrderUnconfirmedRef.current = onOrderUnconfirmed
     onRequestLocationRef.current = onRequestLocation
     reportErrorRef.current = reportError
-  }, [onOrderChange, onRequestLocation, order, reportError])
+  }, [
+    onOrderChange,
+    onOrderUnconfirmed,
+    onRequestLocation,
+    order,
+    orderConfirmed,
+    reportError,
+  ])
 
   const currentOrderKey = orderKey(order)
-  const startedAt = useMemo(() => startTimestamp(order.startTime), [order.startTime])
+  const startedAt = useMemo(() => toServiceTimestamp(order.startTime), [order.startTime])
   const elapsed = startedAt === null ? null : Math.max(0, now - startedAt)
   const rawParkedStatus = parkedStatus(order)
   const isParked = parkedOverride ?? rawParkedStatus ?? false
@@ -259,6 +262,7 @@ export function PerlicaActiveRide({
           actionRef.current === null &&
           orderKey(orderRef.current) === expectedOrderKey
         ) {
+          onOrderUnconfirmedRef.current()
           reportErrorRef.current(error)
         }
       }
@@ -311,7 +315,7 @@ export function PerlicaActiveRide({
   }, [])
 
   const beginAction = useCallback((kind: ActionKind): ActionState | null => {
-    if (actionRef.current !== null) return null
+    if (actionRef.current !== null || !orderConfirmedRef.current) return null
     const operation: ActionState = {
       id: ++actionSequenceRef.current,
       kind,
@@ -418,10 +422,16 @@ export function PerlicaActiveRide({
         ? { lat: parking.snapped.lat, lng: parking.snapped.lng }
         : freshCoords
 
-      const freshOrder = orderResult.status === "fulfilled" ? orderResult.value : null
-      const effectiveOrder =
-        freshOrder?.orderNo === snapshot.orderNo ? freshOrder : snapshot
-      const startedAt = startTimestamp(effectiveOrder.startTime)
+      if (orderResult.status === "rejected") {
+        onOrderUnconfirmedRef.current()
+        throw orderResult.reason
+      }
+      const freshOrder = orderResult.value
+      if (!freshOrder || freshOrder.orderNo !== snapshot.orderNo) {
+        onOrderChangeRef.current(freshOrder)
+        return
+      }
+      const startedAt = toServiceTimestamp(freshOrder.startTime)
       const durationMinutes =
         startedAt === null ? 0 : Math.max(0, (Date.now() - startedAt) / 60_000)
       const rideCard =
@@ -435,7 +445,7 @@ export function PerlicaActiveRide({
         userCode: snapshot.userCode,
         coords: selectedCoords,
         fare: estimateReturnFare(
-          orderMoneyCents(effectiveOrder),
+          orderMoneyCents(freshOrder),
           durationMinutes,
           rideCard,
           fareRules
@@ -548,7 +558,7 @@ export function PerlicaActiveRide({
               size="lg"
               className="h-12 rounded-xl"
               onClick={() => void handleParkCommand(isParked ? "continue" : "park")}
-              disabled={busy || !order.orderNo || !order.userCode}
+              disabled={busy || !orderConfirmed || !order.orderNo || !order.userCode}
             >
               {isParked ? <Play data-icon="inline-start" /> : <Pause data-icon="inline-start" />}
               {action?.kind === (isParked ? "continue" : "park") && currentActionMessage
@@ -560,7 +570,7 @@ export function PerlicaActiveRide({
               size="lg"
               className="h-12 rounded-xl"
               onClick={() => void handleReturnCheck()}
-              disabled={busy || !order.orderNo || !order.userCode}
+              disabled={busy || !orderConfirmed || !order.orderNo || !order.userCode}
             >
               <RotateCcw data-icon="inline-start" />
               {(action?.kind === "return-check" || action?.kind === "return") &&
@@ -723,7 +733,7 @@ export function PerlicaActiveRide({
               variant="destructive"
               className="flex-1"
               onClick={() => void handleReturn()}
-              disabled={busy || !returnCandidate}
+              disabled={busy || !orderConfirmed || !returnCandidate}
             >
               <RotateCcw data-icon="inline-start" />
               {action?.kind === "return" && currentActionMessage

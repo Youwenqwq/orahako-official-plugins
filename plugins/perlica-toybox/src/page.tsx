@@ -58,7 +58,7 @@ import {
 } from "@orahako/ui-primitives"
 import { PerlicaError, type PerlicaClient, type PerlicaConfig } from "./extras/client"
 import type { PerlicaSnapshotCache } from "./extras/cache"
-import { parsePerlicaCode } from "./extras/scan"
+import { parsePerlicaCode, resolvePerlicaUserCode } from "./extras/scan"
 import type { PerlicaStoreInstance } from "./extras/store"
 import type {
   PerlicaCoords,
@@ -102,6 +102,12 @@ const PAGE_SIZE = 10
 const MAP_TTL = 60_000
 const ACCOUNT_TTL = 5 * 60_000
 const GEO_TTL = 10 * 60_000
+/**
+ * One refresh fans out into several requests. A shared toast id keeps an
+ * offline/token failure from stacking identical errors while still showing the
+ * first one instead of dropping it.
+ */
+const REQUEST_ERROR_TOAST_ID = "perlica-request-error"
 
 function formatRadius(value: number): string {
   return value >= 1000 ? `${value / 1000}km` : `${value}m`
@@ -165,6 +171,7 @@ export function PerlicaPage(props: PerlicaPageProps) {
   const [unreadCount, setUnreadCount] = useState<number | null>(null)
   const [order, setOrder] = useState<PerlicaOrder | null>(null)
   const [orderLoaded, setOrderLoaded] = useState(false)
+  const [orderConfirmed, setOrderConfirmed] = useState(false)
   const [logs, setLogs] = useState<PerlicaRideLog[]>([])
   const [logPage, setLogPage] = useState(1)
   const [hasMoreLogs, setHasMoreLogs] = useState(false)
@@ -190,6 +197,7 @@ export function PerlicaPage(props: PerlicaPageProps) {
   const orderRef = useRef(order)
   const mapMoveTimerRef = useRef<number | null>(null)
   const optimisticOrderRef = useRef<{ order: PerlicaOrder; until: number } | null>(null)
+  const deepLinkAppliedRef = useRef(false)
   const loadedAtRef = useRef({ machines: 0, user: 0, cards: 0, logs: 0, geo: 0, unread: 0 })
   const isSessionActive = useCallback(
     () => mountedRef.current && sessionRef.current === session,
@@ -214,7 +222,8 @@ export function PerlicaPage(props: PerlicaPageProps) {
       toast.error(
         error instanceof PerlicaError
           ? t("perlica.requestFailedRet", { ret: error.ret, message: safeServiceMessage(error) })
-          : t("perlica.requestFailed")
+          : t("perlica.requestFailed"),
+        { id: REQUEST_ERROR_TOAST_ID }
       )
     },
     [isSessionActive, t]
@@ -232,10 +241,14 @@ export function PerlicaPage(props: PerlicaPageProps) {
       }
       setOrder(next)
       setOrderLoaded(true)
-      void writeSnapshot(session.accountId, { order: next, orderAt: Date.now() })
+      setOrderConfirmed(true)
     },
-    [isSessionActive, session.accountId, writeSnapshot]
+    [isSessionActive]
   )
+
+  const markOrderUnconfirmed = useCallback(() => {
+    if (isSessionActive()) setOrderConfirmed(false)
+  }, [isSessionActive])
 
   const showOptimisticOrder = useCallback(
     (next: PerlicaOrder) => {
@@ -243,11 +256,11 @@ export function PerlicaPage(props: PerlicaPageProps) {
       optimisticOrderRef.current = { order: next, until: Date.now() + 15_000 }
       setOrder(next)
       setOrderLoaded(true)
-      void writeSnapshot(session.accountId, { order: next, orderAt: Date.now() })
+      setOrderConfirmed(false)
       setSelectedCode("")
       setActiveTab("ride")
     },
-    [isSessionActive, session.accountId, setActiveTab, writeSnapshot]
+    [isSessionActive, setActiveTab]
   )
 
   const loadNearby = useCallback(
@@ -422,7 +435,10 @@ export function PerlicaPage(props: PerlicaPageProps) {
       if (request === orderRequestRef.current) applyOrder(result)
       return result
     } catch (error) {
-      if (isSessionActive() && request === orderRequestRef.current) reportError(error)
+      if (isSessionActive() && request === orderRequestRef.current) {
+        setOrderConfirmed(false)
+        reportError(error)
+      }
       return null
     } finally {
       if (isSessionActive() && request === orderRequestRef.current) setOrderLoading(false)
@@ -500,6 +516,7 @@ export function PerlicaPage(props: PerlicaPageProps) {
     setUser(null)
     setOrder(null)
     setOrderLoaded(false)
+    setOrderConfirmed(false)
     setLogs([])
     setCards([])
     setUnreadCount(null)
@@ -521,8 +538,6 @@ export function PerlicaPage(props: PerlicaPageProps) {
       if (snapshot) {
         setMachines(snapshot.machines)
         setUser(snapshot.user)
-        setOrder(snapshot.order)
-        setOrderLoaded(snapshot.orderAt > 0)
         setLogs(snapshot.logs)
         setCards(snapshot.cards)
         setGeoArea(snapshot.geoArea)
@@ -568,15 +583,20 @@ export function PerlicaPage(props: PerlicaPageProps) {
   ])
 
   useEffect(() => {
+    if (deepLinkAppliedRef.current) return
     const deepLinkedCode = parsePerlicaCode(location.search)
-    if (deepLinkedCode && /^\d{8,9}$/.test(deepLinkedCode)) {
-      setSelectedCode(deepLinkedCode)
-      setManualCode(deepLinkedCode)
-      if (activeTab !== "map") setActiveTab("map")
+    if (!deepLinkedCode) {
+      deepLinkAppliedRef.current = true
+      return
     }
-    // Deep links are delivered once per mount through the plugin page params.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    const userCode = resolvePerlicaUserCode(deepLinkedCode, machines)
+    if (!userCode) return
+    deepLinkAppliedRef.current = true
+    setSelectedCode(userCode)
+    setManualCode(userCode)
+    if (activeTab !== "map") setActiveTab("map")
+    // A nine-digit deep link waits for the nearby list so it can be resolved safely.
+  }, [activeTab, location.search, machines, setActiveTab])
 
   useEffect(
     () => () => {
@@ -619,15 +639,16 @@ export function PerlicaPage(props: PerlicaPageProps) {
 
   const selectCode = useCallback(
     (code: string) => {
-      if (!/^\d{8,9}$/.test(code)) {
+      const userCode = resolvePerlicaUserCode(code, machines)
+      if (!userCode) {
         toast.error(t("perlica.invalidBikeCode"))
         return
       }
-      setSelectedCode(code)
-      setManualCode(code)
+      setSelectedCode(userCode)
+      setManualCode(userCode)
       setActiveTab("map")
     },
-    [setActiveTab, t]
+    [machines, setActiveTab, t]
   )
 
   const refreshing = mapLoading || accountLoading || orderLoading || logsLoading
@@ -799,7 +820,7 @@ export function PerlicaPage(props: PerlicaPageProps) {
                   <InputGroupInput
                     value={manualCode}
                     onChange={(event) =>
-                      setManualCode(event.target.value.replace(/\D/g, "").slice(0, 9))
+                      setManualCode(event.target.value.replace(/\D/g, "").slice(0, 8))
                     }
                     placeholder={t("perlica.manualPlaceholder")}
                     inputMode="numeric"
@@ -820,7 +841,7 @@ export function PerlicaPage(props: PerlicaPageProps) {
                     type="submit"
                     size="icon-sm"
                     className="mr-1.5"
-                    disabled={!/^\d{8,9}$/.test(manualCode)}
+                    disabled={!/^\d{8}$/.test(manualCode)}
                     aria-label={t("perlica.queryMachine")}
                   >
                     <ArrowRight className="size-4" />
@@ -929,7 +950,9 @@ export function PerlicaPage(props: PerlicaPageProps) {
                 key={session.token}
                 client={client}
                 order={order}
+                orderConfirmed={orderConfirmed}
                 onOrderChange={applyOrder}
+                onOrderUnconfirmed={markOrderUnconfirmed}
                 onRequestLocation={() => requestLocation(false)}
                 reportError={reportError}
                 t={t}
@@ -1143,6 +1166,7 @@ export function PerlicaPage(props: PerlicaPageProps) {
               locationConfirmed={locationConfirmed}
               currentOrder={order}
               onOrderChange={applyOrder}
+              onOrderUnconfirmed={markOrderUnconfirmed}
               onBorrowSuccess={showOptimisticOrder}
               onRequestLocation={() => requestLocation(false)}
               onShowOrder={() => {

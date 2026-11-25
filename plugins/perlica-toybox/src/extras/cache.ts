@@ -3,7 +3,6 @@ import type {
   PerlicaCoords,
   PerlicaGeoArea,
   PerlicaMachine,
-  PerlicaOrder,
   PerlicaRideCard,
   PerlicaRideLog,
   PerlicaUserInfo,
@@ -27,8 +26,6 @@ export interface PerlicaSnapshot {
   machinesAt: number
   user: PerlicaUserInfo | null
   userAt: number
-  order: PerlicaOrder | null
-  orderAt: number
   logs: PerlicaRideLog[]
   logsAt: number
   cards: PerlicaRideCard[]
@@ -44,8 +41,6 @@ const EMPTY_SNAPSHOT: PerlicaSnapshot = {
   machinesAt: 0,
   user: null,
   userAt: 0,
-  order: null,
-  orderAt: 0,
   logs: [],
   logsAt: 0,
   cards: [],
@@ -62,7 +57,8 @@ const EMPTY_SNAPSHOT: PerlicaSnapshot = {
  * The snapshot is a local-lifetime cache: it survives app restarts for
  * `SNAPSHOT_TTL` and is dropped as soon as it goes stale. Writes are
  * serialized per account so concurrent request results cannot lose earlier
- * patches through a read-modify-write race.
+ * patches through a read-modify-write race. Active orders are never cached;
+ * ride controls require a live `currentOrder` confirmation.
  */
 export interface PerlicaSnapshotCache {
   read(accountId: string): Promise<PerlicaSnapshot | null>
@@ -71,12 +67,33 @@ export interface PerlicaSnapshotCache {
 }
 
 function normalizeSnapshot(value: Partial<PerlicaSnapshot>): PerlicaSnapshot {
+  const {
+    savedAt,
+    center,
+    machines,
+    machinesAt,
+    user,
+    userAt,
+    logs,
+    logsAt,
+    cards,
+    cardsAt,
+    geoArea,
+    geoAreaAt,
+  } = value
   return {
-    ...EMPTY_SNAPSHOT,
-    ...value,
-    machines: Array.isArray(value.machines) ? value.machines : [],
-    logs: Array.isArray(value.logs) ? value.logs : [],
-    cards: Array.isArray(value.cards) ? value.cards : [],
+    savedAt: typeof savedAt === "number" ? savedAt : 0,
+    center: center ?? null,
+    machines: Array.isArray(machines) ? machines : [],
+    machinesAt: typeof machinesAt === "number" ? machinesAt : 0,
+    user: user ?? null,
+    userAt: typeof userAt === "number" ? userAt : 0,
+    logs: Array.isArray(logs) ? logs : [],
+    logsAt: typeof logsAt === "number" ? logsAt : 0,
+    cards: Array.isArray(cards) ? cards : [],
+    cardsAt: typeof cardsAt === "number" ? cardsAt : 0,
+    geoArea: geoArea ?? null,
+    geoAreaAt: typeof geoAreaAt === "number" ? geoAreaAt : 0,
   }
 }
 

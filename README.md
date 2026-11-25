@@ -13,16 +13,19 @@ the CORS contract provided by GitHub Raw.
 
 | Directory | Plugin ID | Version | Kind |
 | --- | --- | --- | --- |
-| `plugins/perlica-toybox` | `community.perlica-toybox` | 1.0.0 | feature |
-| `plugins/skbird` | `orahako.skbird` | 1.0.0 | feature |
-| `plugins/theme-arknights` | `community.theme.arknights` | 1.0.0 | theme |
+| `plugins/perlica-toybox` | `community.perlica-toybox` | 1.0.1 | feature |
+| `plugins/skbird` | `orahako.skbird` | 1.0.1 | feature |
+| `plugins/theme-arknights` | `community.theme.arknights` | 1.0.1 | theme |
 | `plugins/theme-yuna` | `community.theme.yuna` | 1.0.0 | theme |
-| `plugins/zmu-provider` | `zmu.provider` | 1.0.0 | provider |
+
+ZMU Provider development is paused. Its source is retained under
+`archived/zmu-provider`, outside plugin discovery and release builds.
 
 ## Layout
 
 ```text
-plugins/<plugin>/                 Source, tests, manifest.json, optional assets
+plugins/<plugin>/                 Active source, tests, manifest.json, optional assets
+archived/<plugin>/                Paused source excluded from discovery and builds
 toolchain/ysu-client/             Pinned host submodule and packer
 scripts/plugins.mjs               Plugin discovery and artifact paths
 scripts/build-plugins.mjs         Pack one or all plugins
@@ -60,7 +63,7 @@ UI registrations receive derived Props from the host renderer; they do not read
 bound to the plugin scope. Provider plugins register a `SchoolProvider` factory
 through `ctx.providers.registerProvider`.
 
-Every manifest has `apiVersion: 1`, `version: "1.0.0"`, and
+Every manifest has `apiVersion: 1`, a SemVer `version`, and
 `entry: "dist/index.js"`. Native capabilities must be declared explicitly; a
 ZIP cannot add Android code, modules, permissions, receivers, or widgets.
 
@@ -78,7 +81,7 @@ pnpm install
 
 ```sh
 pnpm test
-pnpm build                          # all five plugins
+pnpm build                          # all active plugins
 pnpm build:plugin -- orahako.skbird # one plugin
 ```
 
@@ -109,9 +112,9 @@ Tags in this repository use `<plugin-id>@<version>` and must exactly match one
 manifest:
 
 ```sh
-pnpm validate:tag -- orahako.skbird@1.0.0
-git tag orahako.skbird@1.0.0
-git push origin orahako.skbird@1.0.0
+pnpm validate:tag -- orahako.skbird@1.0.1
+git tag orahako.skbird@1.0.1
+git push origin orahako.skbird@1.0.1
 ```
 
 The tag workflow checks that the version is absent from the public registry,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
 import { Bell, Bird, Search, Settings, User, X } from "lucide-react"
 import type {
   DerivedComponentProps,
@@ -35,7 +35,12 @@ import {
 import type { SkbirdDictionary } from "../i18n"
 import type { SkbirdConfigStoreInstance } from "../store"
 import type { SkbirdCategory, SkbirdThread } from "../types"
-import { type SkbirdFeedSnapshot, type SkbirdFeedTab } from "../feed-state"
+import {
+  type SkbirdFeedIdentity,
+  type SkbirdFeedSnapshot,
+  type SkbirdFeedTab,
+  sameSkbirdFeedIdentity,
+} from "../feed-state"
 import { SkbirdThreadCard } from "../components/thread-card"
 import { useLoadMoreSentinel } from "../components/use-load-more-sentinel"
 import type { SkbirdMediaAccess } from "../components/skbird-image"
@@ -65,8 +70,11 @@ export interface SkbirdIndexInject {
   readonly media: SkbirdMediaAccess
   readonly pageHref: (page: string, params?: Record<string, string>) => string
   readonly openPage: (page: string, params?: Record<string, string>) => void
-  readonly readFeedState: () => SkbirdFeedSnapshot | null
-  readonly writeFeedState: (snapshot: SkbirdFeedSnapshot) => void
+  readonly readFeedState: (identity: SkbirdFeedIdentity) => SkbirdFeedSnapshot | null
+  readonly writeFeedState: (
+    identity: SkbirdFeedIdentity,
+    snapshot: SkbirdFeedSnapshot
+  ) => void
   readonly refreshUnread: () => Promise<void>
 }
 
@@ -93,6 +101,12 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
     refreshUnread,
   } = props
   const token = useStore((state) => state.token)
+  const deviceId = useStore((state) => state.deviceId)
+  const alias = useStore((state) => state.alias)
+  const identity = useMemo<SkbirdFeedIdentity>(
+    () => ({ token, deviceId, alias }),
+    [token, deviceId, alias]
+  )
   const hasHydrated = useHydrated()
   const unread = useUnread()
   const isMobile = useIsMobile()
@@ -115,7 +129,9 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
   const busyRef = useRef(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [feedStateReady, setFeedStateReady] = useState(false)
-  const initializedRef = useRef(false)
+  const [feedEpoch, setFeedEpoch] = useState(0)
+  const identityRef = useRef<SkbirdFeedIdentity | null>(null)
+  const feedGenerationRef = useRef(0)
   const restoredRef = useRef(false)
   const snapshotAvailableRef = useRef(false)
   const scrollRestoredRef = useRef(false)
@@ -143,8 +159,15 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
       mainScrollTop: scrollRef.current.mainScrollTop,
     }
     persistRef.current = () => {
-      if (!hasHydrated || !token || !initializedRef.current || !feedStateRef.current) return
-      writeFeedState({
+      if (
+        !hasHydrated ||
+        !token ||
+        !sameSkbirdFeedIdentity(identityRef.current, identity) ||
+        !feedStateRef.current
+      ) {
+        return
+      }
+      writeFeedState(identity, {
         ...feedStateRef.current,
         cursor: cursorRef.current,
         searchPage: searchPageRef.current,
@@ -155,6 +178,7 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
   }, [
     hasHydrated,
     token,
+    identity,
     tab,
     wd,
     submittedWd,
@@ -163,6 +187,7 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
     searchOpen,
     threads,
     hasMore,
+    feedEpoch,
     writeFeedState,
   ])
 
@@ -194,44 +219,22 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
     }
   }, [])
 
-  // 列表页被详情页卸载后，从插件会话内存恢复筛选、已加载帖子和分页游标。
-  // 会话内存只在本次插件激活内有效，不写宿主全局存储。
   useEffect(() => {
-    if (!hasHydrated || !token || initializedRef.current) return
-    initializedRef.current = true
-    const snapshot = readFeedState()
-    if (snapshot) {
-      restoredRef.current = true
-      snapshotAvailableRef.current = true
-      restoredScrollRef.current = {
-        scrollY: snapshot.scrollY,
-        mainScrollTop: snapshot.mainScrollTop,
-      }
-      cursorRef.current = snapshot.cursor
-      searchPageRef.current = snapshot.searchPage
-      setTab(snapshot.tab)
-      setWd(snapshot.wd)
-      setSubmittedWd(snapshot.submittedWd)
-      setCateId(snapshot.cateId)
-      setRange(snapshot.range)
-      setSearchOpen(snapshot.searchOpen)
-      setThreads(snapshot.threads)
-      setHasMore(snapshot.hasMore)
-    }
-    setFeedStateReady(true)
-  }, [hasHydrated, token, readFeedState])
-
-  useEffect(() => {
-    if (
-      !hasHydrated ||
-      !token ||
-      !initializedRef.current ||
-      (snapshotAvailableRef.current && !scrollRestoreAppliedRef.current)
-    ) {
-      return
-    }
+    if (snapshotAvailableRef.current && !scrollRestoreAppliedRef.current) return
     persistRef.current()
-  }, [hasHydrated, token, tab, wd, submittedWd, cateId, range, searchOpen, threads, hasMore])
+  }, [
+    hasHydrated,
+    token,
+    identity,
+    tab,
+    wd,
+    submittedWd,
+    cateId,
+    range,
+    searchOpen,
+    threads,
+    hasMore,
+  ])
 
   useEffect(() => {
     if (
@@ -282,6 +285,7 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
     async (append: boolean): Promise<void> => {
       const client = getClient()
       if (!client || busyRef.current) return
+      const generation = feedGenerationRef.current
       busyRef.current = true
       if (append) setLoadingMore(true)
       else setLoading(true)
@@ -291,13 +295,17 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
         if (submittedWd) {
           const page = append ? searchPageRef.current + 1 : 1
           list = await client.search(submittedWd, page, range === "all" ? "" : range)
+          // 身份切换后旧账号的响应不得回写游标、列表或 loading 状态。
+          if (feedGenerationRef.current !== generation) return
           searchPageRef.current = page
           setHasMore(list.length > 0)
         } else if (tab === "hot") {
           list = await client.hot()
+          if (feedGenerationRef.current !== generation) return
           setHasMore(false)
         } else if (tab === "top") {
           list = await client.toplist()
+          if (feedGenerationRef.current !== generation) return
           setHasMore(false)
         } else {
           const fromTime = append ? cursorRef.current : "0"
@@ -305,24 +313,28 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
             tab === "reward"
               ? await client.rewardList(fromTime)
               : await client.latest(fromTime, cateId)
+          if (feedGenerationRef.current !== generation) return
           cursorRef.current = list.length > 0 ? String(list[list.length - 1]!.postTime) : "0"
           setHasMore(list.length > 0)
         }
         setThreads((prev) => (append ? [...prev, ...list] : list))
       } catch (e) {
-        setError(mapError(e))
+        if (feedGenerationRef.current === generation) setError(mapError(e))
       } finally {
-        setLoading(false)
-        setLoadingMore(false)
-        busyRef.current = false
+        if (feedGenerationRef.current === generation) {
+          setLoading(false)
+          setLoadingMore(false)
+          busyRef.current = false
+        }
       }
     },
     [tab, cateId, submittedWd, range, mapError, getClient]
   )
 
-  // 首屏加载；若存在详情页返回快照，则直接使用快照，条件变化仍按原逻辑重新加载。
+  // 首屏加载；若存在同一账号的详情页返回快照，则直接使用快照，条件变化仍按原逻辑重新加载。
   useEffect(() => {
     if (!hasHydrated || !token || !feedStateReady) return
+    if (!sameSkbirdFeedIdentity(identityRef.current, identity)) return
     if (restoredRef.current) {
       restoredRef.current = false
       return
@@ -330,17 +342,74 @@ export const SkbirdIndexPage: SlotComponent<SkbirdIndexPageProps> = (props) => {
     cursorRef.current = "0"
     searchPageRef.current = 1
     void fetchPage(false)
-  }, [hasHydrated, token, feedStateReady, fetchPage])
+  }, [hasHydrated, token, identity, feedStateReady, feedEpoch, fetchPage])
 
-  // 分类列表：进入页面后拉取一次，失败静默
+  // 首次装载或账号身份变化：只恢复同一账号的会话快照。身份不一致时
+  // feed-state store 返回 null，列表清空后照常执行新账号的首屏请求。
+  useEffect(() => {
+    if (!hasHydrated || !token) return
+    if (sameSkbirdFeedIdentity(identityRef.current, identity)) return
+
+    identityRef.current = identity
+    // 旧账号在途响应（含分页）一律作废，避免回写游标或列表。
+    feedGenerationRef.current += 1
+    busyRef.current = false
+    setLoading(false)
+    setLoadingMore(false)
+    setError(null)
+    restoredRef.current = false
+    snapshotAvailableRef.current = false
+    scrollRestoredRef.current = false
+    scrollRestoreAppliedRef.current = false
+    cursorRef.current = "0"
+    searchPageRef.current = 1
+
+    const snapshot = readFeedState(identity)
+    if (snapshot) {
+      restoredRef.current = true
+      snapshotAvailableRef.current = true
+      restoredScrollRef.current = {
+        scrollY: snapshot.scrollY,
+        mainScrollTop: snapshot.mainScrollTop,
+      }
+      cursorRef.current = snapshot.cursor
+      searchPageRef.current = snapshot.searchPage
+      setTab(snapshot.tab)
+      setWd(snapshot.wd)
+      setSubmittedWd(snapshot.submittedWd)
+      setCateId(snapshot.cateId)
+      setRange(snapshot.range)
+      setSearchOpen(snapshot.searchOpen)
+      setThreads(snapshot.threads)
+      setHasMore(snapshot.hasMore)
+    } else {
+      setTab("hot")
+      setWd("")
+      setSubmittedWd("")
+      setCateId("latest")
+      setRange("all")
+      setSearchOpen(false)
+      setThreads([])
+      setHasMore(false)
+      setCategories([])
+    }
+    setFeedStateReady(true)
+    // 即使筛选条件碰巧与旧账号相同，也要触发一次首屏加载。
+    setFeedEpoch((value) => value + 1)
+  }, [hasHydrated, token, identity, readFeedState])
+
+  // 分类列表：进入页面或身份变化后拉取一次，失败静默
   useEffect(() => {
     const client = getClient()
     if (!hasHydrated || !client) return
+    const generation = feedGenerationRef.current
     client
       .categories()
-      .then(setCategories)
+      .then((list) => {
+        if (feedGenerationRef.current === generation) setCategories(list)
+      })
       .catch(() => {})
-  }, [hasHydrated, token, getClient])
+  }, [hasHydrated, token, identity, getClient])
 
   // 与旧实现一致：每次回到列表页刷新一次未读数（插件激活时也会刷新）。
   useEffect(() => {

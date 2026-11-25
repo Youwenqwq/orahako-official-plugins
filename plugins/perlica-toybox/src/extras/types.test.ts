@@ -8,6 +8,7 @@ import {
   toPerlicaRideDetail,
   toPerlicaRideLogs,
   toPerlicaUserInfo,
+  toServiceTimestamp,
 } from "./types"
 
 const TOKEN = "TOKEN:10001:20002:00000000-0000-4000-8000-000000000000"
@@ -38,6 +39,43 @@ describe("parsePerlicaToken", () => {
     expect(() => parsePerlicaToken("https://example.invalid/?token=none")).toThrow(
       "Invalid Perlica token"
     )
+  })
+})
+
+describe("toServiceTimestamp", () => {
+  it("treats naive service timestamps as China Standard Time", () => {
+    expect(toServiceTimestamp("2026-11-15 03:25:06")).toBe(Date.UTC(2026, 10, 14, 19, 25, 6))
+    expect(toServiceTimestamp("2026-11-15T03:25:06")).toBe(Date.UTC(2026, 10, 14, 19, 25, 6))
+  })
+
+  it("returns the same instant regardless of the device time zone", () => {
+    const original = process.env.TZ
+    try {
+      process.env.TZ = "America/New_York"
+      const west = toServiceTimestamp("2026-11-15 03:25:06")
+      process.env.TZ = "Asia/Shanghai"
+      const east = toServiceTimestamp("2026-11-15 03:25:06")
+      expect(west).toBe(east)
+      expect(west).toBe(Date.UTC(2026, 10, 14, 19, 25, 6))
+    } finally {
+      if (original === undefined) delete process.env.TZ
+      else process.env.TZ = original
+    }
+  })
+
+  it("honors explicit time zones and epoch values", () => {
+    expect(toServiceTimestamp("2026-11-15T03:25:06Z")).toBe(Date.UTC(2026, 10, 15, 3, 25, 6))
+    expect(toServiceTimestamp("2026-11-15T03:25:06+08:00")).toBe(
+      Date.UTC(2026, 10, 14, 19, 25, 6)
+    )
+    expect(toServiceTimestamp(1_700_000_000)).toBe(1_700_000_000_000)
+    expect(toServiceTimestamp("1700000000000")).toBe(1_700_000_000_000)
+  })
+
+  it("returns null for empty or malformed input", () => {
+    expect(toServiceTimestamp("")).toBeNull()
+    expect(toServiceTimestamp("not-a-date")).toBeNull()
+    expect(toServiceTimestamp(Number.NaN)).toBeNull()
   })
 })
 

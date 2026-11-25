@@ -16,6 +16,7 @@ import {
   toPerlicaStations,
   toPerlicaUnreadCount,
   toPerlicaUserInfo,
+  toServiceTimestamp,
   type PerlicaCoords,
   type PerlicaGeoArea,
   type PerlicaMachine,
@@ -47,16 +48,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 function isStalePosition(value: unknown, now: number): boolean {
   if (value === null || value === undefined || value === "") return false
-  let timestamp = Number.NaN
-  if (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) {
-    const numeric = Number(value)
-    if (Number.isFinite(numeric))
-      timestamp = Math.abs(numeric) < 1_000_000_000_000 ? numeric * 1000 : numeric
-  }
-  if (!Number.isFinite(timestamp) && typeof value === "string") {
-    timestamp = Date.parse(value.replace(" ", "T"))
-  }
-  return Number.isFinite(timestamp) && now - timestamp > DAY_MS
+  const timestamp = toServiceTimestamp(value)
+  return timestamp !== null && now - timestamp > DAY_MS
 }
 
 export class PerlicaError extends Error {

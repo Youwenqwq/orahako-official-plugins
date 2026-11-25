@@ -57,11 +57,11 @@ describe("Perlica snapshot cache", () => {
 
     await Promise.all([
       cache.write("1001", { userAt: 10 }),
-      cache.write("1001", { orderAt: 20 }),
+      cache.write("1001", { geoAreaAt: 20 }),
       cache.write("1001", { logsAt: 30 }),
     ])
 
-    expect(await cache.read("1001")).toMatchObject({ userAt: 10, orderAt: 20, logsAt: 30 })
+    expect(await cache.read("1001")).toMatchObject({ userAt: 10, geoAreaAt: 20, logsAt: 30 })
   })
 
   it("drops expired snapshots and removes the stale entry", async () => {
@@ -74,8 +74,6 @@ describe("Perlica snapshot cache", () => {
       machinesAt: 0,
       user: null,
       userAt: 0,
-      order: null,
-      orderAt: 0,
       logs: [],
       logsAt: 0,
       cards: [],
@@ -125,6 +123,24 @@ describe("Perlica snapshot cache", () => {
     await expect(denied.write("1001", { machinesAt: 1 })).resolves.toBeUndefined()
     await expect(denied.clear("1001")).resolves.toBeUndefined()
     expect(await denied.read("1001")).toBeNull()
+  })
+
+  it("never restores an active order from a legacy snapshot", async () => {
+    const { storage, values } = createStorage()
+    const cache = createPerlicaSnapshotCache(storage)
+    values.set(
+      snapshotKey("1001"),
+      JSON.stringify({
+        savedAt: Date.now(),
+        order: { orderNo: "ORDER-1", userCode: "80369677", status: "riding" },
+        orderAt: Date.now(),
+      })
+    )
+
+    const stored = await cache.read("1001")
+    expect(stored).not.toBeNull()
+    expect(stored).not.toHaveProperty("order")
+    expect(stored).not.toHaveProperty("orderAt")
   })
 
   it("ignores malformed payloads", async () => {

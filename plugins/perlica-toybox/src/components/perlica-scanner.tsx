@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react"
 import type { ChangeEvent } from "react"
 import type { Html5Qrcode } from "html5-qrcode"
-import { Image as ImageIcon } from "lucide-react"
+import { Image as ImageIcon, X } from "lucide-react"
 import { Button } from "@orahako/ui-primitives"
 import {
   Dialog,
@@ -294,6 +294,17 @@ export function PerlicaScanner({ open, onOpenChange, onCode, t }: PerlicaScanner
           </p>
         ) : null}
 
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="absolute top-[max(1rem,env(safe-area-inset-top,0px))] right-4 size-12 rounded-full border-white/30 bg-black/45 text-white shadow-lg backdrop-blur-md hover:bg-black/65 hover:text-white"
+          onClick={() => onOpenChange(false)}
+          aria-label={t("perlica.scannerClose")}
+          title={t("perlica.scannerClose")}
+        >
+          <X className="size-5" />
+        </Button>
         <input
           ref={imageInputRef}
           type="file"

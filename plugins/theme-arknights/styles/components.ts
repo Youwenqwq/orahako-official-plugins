@@ -7,37 +7,33 @@ export const componentsCss = `
  * Shell
  * ------------------------------------------------------------------ */
 
-main > header {
+main > header[data-shell-header] {
   border-bottom: 2px solid var(--edge);
 }
 
-main > header:not(.fixed) {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  padding-top: 0.75rem;
-  padding-bottom: 0.75rem;
-  background-color: color-mix(in oklab, var(--background) 95%, transparent);
-  backdrop-filter: blur(8px);
-}
+/* The default shell now uses one header tree: fixed on mobile, in flow on
+   desktop (md:relative, transparent, no blur, md:py-4). The old desktop
+   header the removed selector targeted is gone, and re-applying
+   sticky/blur/padding on [data-shell-header] would override that deliberate
+   host layout. Keep only the shared border treatment. */
 
-nav[aria-label="Primary"] {
+nav[data-shell-bottom-nav] {
   border-top: 2px solid var(--edge);
 }
 
-nav[aria-label="Primary"] a {
+nav[data-shell-bottom-nav] a {
   font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
   font-size: 0.6rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-nav[aria-label="Primary"] a[aria-current="page"] {
+nav[data-shell-bottom-nav] a[aria-current="page"] {
   position: relative;
   color: var(--brand);
 }
 
-nav[aria-label="Primary"] a[aria-current="page"]::before {
+nav[data-shell-bottom-nav] a[aria-current="page"]::before {
   content: "";
   position: absolute;
   top: 0;

@@ -2,6 +2,27 @@ import type { SkbirdThread } from "./types"
 
 export type SkbirdFeedTab = "hot" | "latest" | "top" | "reward"
 
+/**
+ * Identity of the account that owns a feed snapshot. Token, deviceId and alias
+ * all affect which posts the server returns, so every field is part of the
+ * identity. Instances live only in plugin session memory; they are never put
+ * into a snapshot payload or host storage, which keeps credentials out of the
+ * feed-state slot.
+ */
+export interface SkbirdFeedIdentity {
+  readonly token: string
+  readonly deviceId: string
+  readonly alias: string
+}
+
+export function sameSkbirdFeedIdentity(
+  a: SkbirdFeedIdentity | null,
+  b: SkbirdFeedIdentity | null
+): boolean {
+  if (a === null || b === null) return a === b
+  return a.token === b.token && a.deviceId === b.deviceId && a.alias === b.alias
+}
+
 export interface SkbirdFeedSnapshot {
   version: 1
   tab: SkbirdFeedTab
@@ -41,8 +62,13 @@ function createMemorySessionStorage(): SkbirdFeedStateStorage {
 }
 
 export interface SkbirdFeedStateStore {
-  read(): SkbirdFeedSnapshot | null
-  write(snapshot: SkbirdFeedSnapshot): void
+  /**
+   * Returns the stored snapshot only when it was written by `identity`.
+   * A different account always reads `null`, so the list falls back to its
+   * normal first-screen fetch instead of restoring another account's posts.
+   */
+  read(identity: SkbirdFeedIdentity): SkbirdFeedSnapshot | null
+  write(identity: SkbirdFeedIdentity, snapshot: SkbirdFeedSnapshot): void
 }
 
 function isFeedTab(value: unknown): value is SkbirdFeedTab {
@@ -81,8 +107,10 @@ function isSnapshot(value: unknown): value is SkbirdFeedSnapshot {
 export function createSkbirdFeedStateStore(
   storage: SkbirdFeedStateStorage = createMemorySessionStorage()
 ): SkbirdFeedStateStore {
+  let storedIdentity: SkbirdFeedIdentity | null = null
   return {
-    read() {
+    read(identity) {
+      if (!sameSkbirdFeedIdentity(storedIdentity, identity)) return null
       try {
         const raw = storage.getItem()
         if (!raw) return null
@@ -92,19 +120,15 @@ export function createSkbirdFeedStateStore(
         return null
       }
     },
-    write(snapshot) {
+    write(identity, snapshot) {
       try {
         storage.setItem(JSON.stringify(snapshot))
+        // Bind the slot to the writer only after the payload landed, so a
+        // failed write never exposes the previous account's snapshot.
+        storedIdentity = identity
       } catch {
         // A failed session write must not block list navigation.
       }
     },
   }
 }
-
-/**
- * Session-only store shared by the plugin's list and detail pages. The plugin
- * creates one instance in `apply`, so filters, loaded threads, pagination
- * cursors and scroll offsets survive page navigation within one activation and
- * are dropped when the plugin is disposed or the app reloads.
- */

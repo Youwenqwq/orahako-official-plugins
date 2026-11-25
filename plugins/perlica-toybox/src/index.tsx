@@ -22,7 +22,7 @@ import "./styles/leaflet.css"
 export const manifest: PluginManifest = {
   id: PERLICA_PLUGIN_ID,
   name: "Perlica",
-  version: "1.0.0",
+  version: "1.0.1",
   apiVersion: PLUGIN_API_VERSION,
   minAppVersion: "0.16.0",
   kind: "feature",
@@ -51,6 +51,7 @@ export const perlicaPlugin = definePlugin({
     i18n.register(perlicaDictionary)
 
     const runtime = createPerlicaRuntime({ http, native, storage })
+    ctx.effect(() => () => runtime.dispose())
     const refreshRequests = createObservableSource(0)
     const refreshing = createObservableSource(false)
 
@@ -196,8 +197,6 @@ export const perlicaPlugin = definePlugin({
       scope: "plugin",
       order: 30,
     })
-
-    ctx.effect(() => () => runtime.dispose())
   },
 })
 

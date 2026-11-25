@@ -35,7 +35,7 @@ function createContext() {
 describe("community.theme.arknights", () => {
   it("declares an API v1 theme manifest", () => {
     expect(manifest.id).toBe("community.theme.arknights")
-    expect(manifest.version).toBe("1.0.0")
+    expect(manifest.version).toBe("1.0.1")
     expect(manifest.apiVersion).toBe(PLUGIN_API_VERSION)
     expect(manifest.kind).toBe("theme")
     expect(manifest.inject).toEqual(["ui"])
