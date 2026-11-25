@@ -13,13 +13,12 @@ the CORS contract provided by GitHub Raw.
 
 | Directory | Plugin ID | Version | Kind |
 | --- | --- | --- | --- |
-| `plugins/perlica-toybox` | `community.perlica-toybox` | 1.0.1 | feature |
 | `plugins/skbird` | `orahako.skbird` | 1.0.1 | feature |
 | `plugins/theme-arknights` | `community.theme.arknights` | 1.0.1 | theme |
 | `plugins/theme-yuna` | `community.theme.yuna` | 1.0.0 | theme |
 
-ZMU Provider development is paused. Its source is retained under
-`archived/zmu-provider`, outside plugin discovery and release builds.
+ZMU Provider and Perlica development are paused. Their sources are retained
+under `archived/`, outside plugin discovery and release builds.
 
 ## Layout
 
