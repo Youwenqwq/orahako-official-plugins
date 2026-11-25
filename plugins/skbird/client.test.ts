@@ -77,8 +77,8 @@ describe("skbirdImageUrl", () => {
   })
 
   it("微信 HTTP 头像升级为 HTTPS，避免 Capacitor 明文请求被系统拦截", () => {
-    expect(skbirdImageUrl("http://thirdwx.qlogo.cn/mmopen/x/132")).toBe(
-      "https://example.invalid/avatar.png"
+    expect(skbirdImageUrl("http://thirdwx.qlogo.cn/mmopen/test-avatar")).toBe(
+      "https://thirdwx.qlogo.cn/mmopen/test-avatar"
     )
   })
 
