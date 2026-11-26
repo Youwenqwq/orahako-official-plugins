@@ -1,26 +1,42 @@
 name: Release Plugin
 
 # Tags are <plugin-id>@<version> and must exactly match one plugin manifest.
-# Releases preserve the build and checksum. Public installation bytes are the
-# matching committed artifacts in orahako-plugin-registry, served by GitHub Raw.
+# Releases preserve the build and checksum, then dispatch a `plugin-release`
+# event to Youwenqwq/orahako-plugin-registry to open a reviewed ingest PR.
 on:
   push:
     tags:
       - "*@*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (<plugin-id>@<version>), e.g. orahako.shell.win98@1.0.0"
+        required: true
+        type: string
+      changelog:
+        description: "Optional changelog note forwarded to the registry PR"
+        required: false
+        default: ""
+        type: string
+      platforms:
+        description: "Optional comma-separated platforms (e.g. web or web,android)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   release:
-    name: Build and publish plugin ZIP
+    name: Build, publish release, and notify registry
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout release tag
+      - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Setup pnpm
@@ -35,9 +51,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Run plugin tests
+        run: pnpm test
+
       - name: Validate release tag against plugin manifests
         id: release
-        run: node scripts/validate-release-tag.mjs "$GITHUB_REF_NAME"
+        env:
+          TARGET_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: node scripts/validate-release-tag.mjs "$TARGET_TAG"
 
       - name: Build tagged plugin
         env:
@@ -45,25 +66,81 @@ jobs:
         run: node scripts/build-plugins.mjs "$PLUGIN_ID"
 
       - name: Create GitHub Release
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
           PLUGIN_ID: ${{ steps.release.outputs.plugin_id }}
           VERSION: ${{ steps.release.outputs.version }}
           ZIP: ${{ steps.release.outputs.zip }}
+          IS_DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           set -euo pipefail
           test -f "$ZIP" || { echo "::error::Missing release artifact: $ZIP"; exit 1; }
           SHA256=$(sha256sum "$ZIP" | awk '{print $1}')
+          ZIP_NAME=$(basename "$ZIP")
+          ZIP_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ZIP_NAME}"
+
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "zip_url=${ZIP_URL}" >> "$GITHUB_OUTPUT"
+
           cat > release-notes.md <<EOF
           Release for \`${PLUGIN_ID}\` ${VERSION}, API v1.
 
-          Marketplace distribution is reviewed separately in
+          Marketplace distribution is reviewed in
           https://github.com/Youwenqwq/orahako-plugin-registry and served through GitHub Raw.
 
           SHA-256: \`${SHA256}\`
           EOF
-          gh release create "$TAG" "$ZIP" \
-            --verify-tag \
-            --title "$TAG" \
-            --notes-file release-notes.md
+
+          if [ "$IS_DISPATCH" = "true" ]; then
+            gh release create "$TAG" "$ZIP" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --notes-file release-notes.md
+          else
+            gh release create "$TAG" "$ZIP" \
+              --verify-tag \
+              --title "$TAG" \
+              --notes-file release-notes.md
+          fi
+
+      - name: Dispatch ingest PR in orahako-plugin-registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_DISPATCH_TOKEN }}
+          PLUGIN_ID: ${{ steps.release.outputs.plugin_id }}
+          VERSION: ${{ steps.release.outputs.version }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SOURCE_PATH: ${{ steps.release.outputs.directory }}
+          ZIP_URL: ${{ steps.publish.outputs.zip_url }}
+          SHA256: ${{ steps.publish.outputs.sha256 }}
+          CHANGELOG: ${{ github.event_name == 'workflow_dispatch' && inputs.changelog || '' }}
+          PLATFORMS: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || '' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$REGISTRY_TOKEN" ]; then
+            echo "::notice::REGISTRY_DISPATCH_TOKEN is not configured; skipped automatic PR dispatch to Youwenqwq/orahako-plugin-registry."
+            exit 0
+          fi
+
+          PAYLOAD=$(node -e '
+            console.log(JSON.stringify({
+              event_type: "plugin-release",
+              client_payload: {
+                plugin_id: process.env.PLUGIN_ID,
+                version: process.env.VERSION,
+                tag: process.env.TAG,
+                source_path: process.env.SOURCE_PATH,
+                zip_url: process.env.ZIP_URL,
+                sha256: process.env.SHA256,
+                changelog: process.env.CHANGELOG,
+                platforms: process.env.PLATFORMS,
+              },
+            }))
+          ')
+
+          GH_TOKEN="$REGISTRY_TOKEN" gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            repos/Youwenqwq/orahako-plugin-registry/dispatches \
+            --input - <<< "$PAYLOAD"
