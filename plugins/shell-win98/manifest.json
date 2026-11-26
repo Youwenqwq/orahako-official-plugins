@@ -1,0 +1,14 @@
+{
+  "id": "orahako.shell.win98",
+  "name": "Windows 98 桌面",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "kind": "shell",
+  "inject": ["ui", "slots", "router", "navigation", "i18n", "storage", "assets"],
+  "entry": "dist/index.js",
+  "categories": ["appearance"],
+  "providerIndependent": true,
+  "description": "经典 Windows 98 风格多窗口 Web 桌面环境，支持自由拖拽、八向缩放、平铺与层叠、开始菜单、任务栏、内置资源管理器与显示属性（壁纸与配色方案）。",
+  "author": "Youwenqwq",
+  "homepage": "https://github.com/Youwenqwq/orahako-official-plugins/tree/main/plugins/shell-win98"
+}
