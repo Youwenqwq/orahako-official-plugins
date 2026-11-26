@@ -126,18 +126,24 @@ function Lightbox({
     setZoomedIn(scale > MIN_SCALE)
   }
 
-  /** 拖拽边界：图片不拖出视口 */
+  /** 拖拽边界：图片不拖出当前灯箱容器（兼容全屏与多窗口 Shell） */
   function clampPan() {
     const el = wrapRef.current
     if (!el) return
+    const container = el.parentElement
+    const viewW = container?.clientWidth || window.innerWidth
+    const viewH = container?.clientHeight || window.innerHeight
+    const img = el.querySelector("img")
+    const contentW = img?.offsetWidth || el.offsetWidth
+    const contentH = img?.offsetHeight || el.offsetHeight
     const tf = tfRef.current
-    const maxX = Math.max(0, (el.offsetWidth * tf.scale - window.innerWidth) / 2)
-    const maxY = Math.max(0, (el.offsetHeight * tf.scale - window.innerHeight) / 2)
+    const maxX = Math.max(0, (contentW * tf.scale - viewW) / 2)
+    const maxY = Math.max(0, (contentH * tf.scale - viewH) / 2)
     tf.x = Math.min(maxX, Math.max(-maxX, tf.x))
     tf.y = Math.min(maxY, Math.max(-maxY, tf.y))
   }
 
-  /** 以视口坐标为焦点缩放（焦点保持不动）；wrap 布局中心即视口中心 */
+  /** 以灯箱容器中心为基准缩放（焦点保持不动） */
   function zoomAt(clientX: number, clientY: number, nextScale: number, animate: boolean) {
     const tf = tfRef.current
     const s1 = Math.min(MAX_SCALE, Math.max(MIN_SCALE, nextScale))
@@ -146,8 +152,9 @@ function Lightbox({
       tf.x = 0
       tf.y = 0
     } else {
-      const cx = window.innerWidth / 2
-      const cy = window.innerHeight / 2
+      const rect = wrapRef.current?.parentElement?.getBoundingClientRect()
+      const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2
+      const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2
       const k = s1 / tf.scale
       const dx = clientX - (cx + tf.x)
       const dy = clientY - (cy + tf.y)
@@ -333,7 +340,7 @@ function Lightbox({
             const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
             zoomAt(e.clientX, e.clientY, tfRef.current.scale * factor, false)
           }}
-          className={`max-h-full max-w-full touch-none select-none ${
+          className={`flex h-[90%] w-[92%] items-center justify-center touch-none select-none ${
             zoomedIn ? "cursor-move" : "cursor-zoom-in"
           }`}
           role="presentation"
@@ -343,7 +350,7 @@ function Lightbox({
             t={t}
             url={url}
             alt={alt}
-            className={`max-h-[90vh] max-w-[92vw] object-contain transition-opacity duration-200 ${
+            className={`max-h-full max-w-full object-contain transition-opacity duration-200 ${
               shown ? "opacity-100" : "opacity-0"
             }`}
           />
