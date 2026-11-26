@@ -7,7 +7,7 @@
   "inject": ["ui", "slots", "router", "i18n", "http", "storage", "native"],
   "nativeCapabilities": ["native.files@1"],
   "entry": "dist/index.js",
-  "minAppVersion": "0.16.0",
+  "minAppVersion": "0.15.0",
   "categories": ["toybox"],
   "providerIndependent": true,
   "description": "森空鸟热榜、帖子、消息与个人账户。",

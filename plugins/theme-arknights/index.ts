@@ -6,7 +6,7 @@ export const manifest: PluginManifest = {
   name: "明日方舟 × 新粗野主义",
   version: "1.0.1",
   apiVersion: PLUGIN_API_VERSION,
-  minAppVersion: "0.16.0",
+  minAppVersion: "0.15.0",
   kind: "theme",
   inject: ["ui"],
   entry: "dist/index.js",

@@ -6,7 +6,7 @@
   "kind": "theme",
   "inject": ["ui", "assets"],
   "entry": "dist/index.js",
-  "minAppVersion": "0.16.0",
+  "minAppVersion": "0.15.0",
   "description": "基于 YUNA 设计规范的 102、明日方舟和红魔馆皮肤，均支持浅色、深色与跟随系统。",
   "author": "QS-Ling"
 }

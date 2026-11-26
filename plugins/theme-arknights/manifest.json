@@ -6,7 +6,7 @@
   "kind": "theme",
   "inject": ["ui"],
   "entry": "dist/index.js",
-  "minAppVersion": "0.16.0",
+  "minAppVersion": "0.15.0",
   "description": "罗德岛终端视觉体系：石墨画布、2px 墨边、零圆角、硬偏移阴影、工程网格与青色信号。",
   "author": "heshuoshuo0512 / Orahako"
 }
