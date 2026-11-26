@@ -1,0 +1,15 @@
+{
+  "id": "orahako.daimao",
+  "name": "呆猫桌宠",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "kind": "feature",
+  "inject": ["slots", "settings", "i18n", "storage", "assets"],
+  "entry": "dist/index.js",
+  "minAppVersion": "0.15.0",
+  "categories": ["toybox"],
+  "providerIndependent": true,
+  "description": "在页面全局展示《怪物猎人》呆猫 Live2D 桌宠，支持点击互动、滚轮/双指缩放、拖拽定位、待机动画与键鼠模式。",
+  "author": "Orahako",
+  "homepage": "https://github.com/Youwenqwq/orahako-official-plugins/tree/main/plugins/daimao"
+}
