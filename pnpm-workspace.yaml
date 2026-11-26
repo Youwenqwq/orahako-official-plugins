@@ -1,6 +1,9 @@
 packages:
   - "plugins/*"
-  # Public host contracts come from the pinned toolchain checkout.
-  - "toolchain/ysu-client/packages/core/sdk"
-  - "toolchain/ysu-client/packages/core/ui-primitives"
-  - "toolchain/ysu-client/packages/edu/sdk"
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - "@orahako/academic-sdk@0.1.0"
+  - "@orahako/cli@0.1.0"
+  - "@orahako/sdk@0.1.0"
+  - "@orahako/ui-primitives@0.1.0"

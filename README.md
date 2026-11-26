@@ -26,28 +26,17 @@ under `archived/`, outside plugin discovery and release builds.
 ```text
 plugins/<plugin>/                 Active source, tests, manifest.json, optional assets
 archived/<plugin>/                Paused source excluded from discovery and builds
-toolchain/ysu-client/             Pinned host submodule and packer
 scripts/plugins.mjs               Plugin discovery and artifact paths
-scripts/build-plugins.mjs         Pack one or all plugins
+scripts/build-plugins.mjs         Pack one or all plugins via @orahako/cli
 scripts/validate-release-tag.mjs  Validate <plugin-id>@<version> tags
 artifacts/                        Generated ZIPs (gitignored)
 ```
 
-The pinned toolchain supplies the current `@orahako/sdk`,
-`@orahako/academic-sdk`, `@orahako/ui-primitives`, and `scripts/plugin.ts`.
-Update the submodule pin and refresh `pnpm-lock.yaml` together. Do not import
-host-private modules or the removed `plugin-sdk` / `plugin-ui` packages.
-
-Set `ORAHAKO_TOOLCHAIN` to an absolute host checkout for local development:
-
-```sh
-ORAHAKO_TOOLCHAIN=/home/me/ysu-client pnpm test
-ORAHAKO_TOOLCHAIN=/home/me/ysu-client pnpm build
-```
-
-The Vitest aliases and build script honor this override. The pnpm workspace
-still links public packages from `toolchain/ysu-client`, so the submodule must
-contain the same package layout.
+Public host contracts and the packer are installed directly from npm:
+`@orahako/sdk`, `@orahako/academic-sdk`, `@orahako/ui-primitives`, and
+`@orahako/cli`. No host repository checkout or git submodule is required. Do
+not import host-private modules or the removed `plugin-sdk` / `plugin-ui`
+packages.
 
 ## Public contracts
 
@@ -69,11 +58,9 @@ ZIP cannot add Android code, modules, permissions, receivers, or widgets.
 
 ## Setup
 
-Requires Node.js 24+, pnpm 12, and Git submodule support:
+Requires Node.js 24+ and pnpm 12:
 
 ```sh
-git submodule update --init --recursive
-pnpm --dir toolchain/ysu-client install --frozen-lockfile
 pnpm install
 ```
 
@@ -96,12 +83,19 @@ and prints its exact size and SHA-256.
 GitHub Releases preserve tagged builds and checksums for maintainers. Public
 installation uses the reviewed bytes committed to the registry:
 
-1. Build the plugin and copy its ZIP without modification to
-   `orahako-plugin-registry/dist/plugins/<id>/<version>.zip`.
-2. Update the corresponding registry metadata, including `apiVersion: 1`, the
-   GitHub Raw `zipUrl`, size, SHA-256, and `publishedAt`.
-3. In the registry, run `pnpm generate && pnpm validate`, then commit metadata,
-   generated `dist/plugins.json`, and the ZIP together.
+1. Build the plugin to produce `artifacts/<id>-<version>.zip`.
+2. In `orahako-plugin-registry`, ingest the built ZIP and validate offline:
+
+   ```sh
+   pnpm run ingest ../orahako-official-plugins/artifacts/<id>-<version>.zip --changelog "..."
+   pnpm run validate
+   ```
+
+   For a brand-new plugin, also pass `--source-path plugins/<dir>` (and any
+   display overrides such as `--summary` or `--categories` if not in
+   `manifest.json`).
+3. Commit the updated `plugins/<id>.json`, generated `dist/plugins.json`, and
+   `dist/plugins/<id>/<version>.zip` together.
 4. After the registry reaches `main`, clients read the new index and ZIPs
    directly from `raw.githubusercontent.com`.
 

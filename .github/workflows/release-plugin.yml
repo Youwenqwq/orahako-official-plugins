@@ -20,10 +20,8 @@ jobs:
     name: Build and publish plugin ZIP
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout release tag and toolchain
+      - name: Checkout release tag
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -33,15 +31,8 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            toolchain/ysu-client/pnpm-lock.yaml
 
-      - name: Install pinned toolchain dependencies
-        working-directory: toolchain/ysu-client
-        run: pnpm install --frozen-lockfile
-
-      - name: Install plugin workspace dependencies
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Validate release tag against plugin manifests

@@ -1,8 +1,7 @@
-import { spawnSync } from "node:child_process"
-import { existsSync } from "node:fs"
 import { mkdir, rm } from "node:fs/promises"
 import path from "node:path"
-import { ARTIFACTS_DIR, TOOLCHAIN_DIR, listPlugins } from "./plugins.mjs"
+import { packPlugin } from "@orahako/cli"
+import { ARTIFACTS_DIR, listPlugins } from "./plugins.mjs"
 
 const requested = process.argv.slice(2).filter((argument) => argument !== "--")
 if (requested.length > 1) {
@@ -24,16 +23,6 @@ if (selected.length === 0) {
   process.exit(1)
 }
 
-const packer = path.join(TOOLCHAIN_DIR, "scripts", "plugin.ts")
-const tsxCli = path.join(TOOLCHAIN_DIR, "node_modules", "tsx", "dist", "cli.mjs")
-if (!existsSync(packer) || !existsSync(tsxCli)) {
-  console.error(
-    `Incomplete pinned toolchain at ${path.relative(process.cwd(), TOOLCHAIN_DIR)}. ` +
-      "Run: git submodule update --init --recursive && pnpm --dir toolchain/ysu-client install --frozen-lockfile"
-  )
-  process.exit(1)
-}
-
 // A full build starts from a clean output directory. A targeted build keeps
 // unrelated artifacts so local release dry runs do not disturb them.
 if (!requested[0]) await rm(ARTIFACTS_DIR, { recursive: true, force: true })
@@ -42,22 +31,13 @@ await mkdir(ARTIFACTS_DIR, { recursive: true })
 const results = []
 for (const plugin of selected) {
   console.log(`Packing ${plugin.id}@${plugin.version} -> ${path.relative(process.cwd(), plugin.artifact)}`)
-  const result = spawnSync(
-    process.execPath,
-    [tsxCli, packer, "pack", plugin.directory, plugin.artifact],
-    { cwd: process.cwd(), stdio: "inherit" }
-  )
-  if (result.error) throw result.error
-  if (result.status !== 0) {
-    throw new Error(
-      `Packing ${plugin.id} failed with exit code ${result.status}. ` +
-        "Install the pinned toolchain dependencies first: pnpm --dir toolchain/ysu-client install --frozen-lockfile"
-    )
-  }
+  const packed = await packPlugin(plugin.directory, plugin.artifact)
   results.push({
-    id: plugin.id,
-    version: plugin.version,
-    artifact: path.relative(process.cwd(), plugin.artifact),
+    id: packed.id,
+    version: packed.version,
+    artifact: path.relative(process.cwd(), packed.output),
+    size: packed.size,
+    sha256: packed.sha256,
   })
 }
 
