@@ -13,8 +13,17 @@ function palette(skin: YunaSkin, mode: "light" | "dark") {
       : skin === "102"
         ? "#111427"
         : skin === "arknights"
-          ? "#191b1d"
-          : "#3b1723"
+          ? "#11161a"
+          : skin === "scarlet"
+            ? "#3b1723"
+            : "#210c14"
+  const radius = skin === "scarlet" ? ".5rem" : skin === "scarlet2" ? "2px" : "0px"
+  const heading =
+    skin === "scarlet" || skin === "scarlet2"
+      ? serif
+      : skin === "arknights"
+        ? '"Yuna Barlow Condensed", ' + sans
+        : sans
   return `html${mode === "dark" ? ".dark" : ":not(.dark)"} {
     ${Object.entries(source)
       .map(([key, value]) => `--yuna-${key}: ${value};`)
@@ -45,9 +54,9 @@ function palette(skin: YunaSkin, mode: "light" | "dark") {
     --sidebar-accent-foreground: var(--yuna-blue);
     --sidebar-border: var(--yuna-line);
     --sidebar-ring: var(--yuna-blue);
-    --radius: ${skin === "scarlet" ? ".5rem" : "0px"};
+    --radius: ${radius};
     --font-sans: ${sans};
-    --font-heading: ${skin === "scarlet" ? serif : skin === "arknights" ? '"Yuna Barlow Condensed", ' + sans : sans};
+    --font-heading: ${heading};
   }`
 }
 
@@ -180,14 +189,82 @@ const structure: Record<YunaSkin, string> = {
   `,
   arknights: `
     html body { background-image: linear-gradient(var(--yuna-ark-grid) 1px, transparent 1px), linear-gradient(90deg, var(--yuna-ark-grid) 1px, transparent 1px); background-size: 48px 48px; }
+    html.dark body {
+      background-image:
+        linear-gradient(var(--yuna-ark-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--yuna-ark-grid) 1px, transparent 1px),
+        radial-gradient(ellipse 62% 46% at 88% 8%, rgba(54, 209, 238, .10), transparent 56%),
+        radial-gradient(ellipse 48% 42% at 8% 84%, rgba(244, 198, 61, .07), transparent 54%);
+      background-size: 48px 48px, 48px 48px, 100% 100%, 100% 100%;
+    }
     html [data-slot="card"] { border-top: 3px solid var(--yuna-ark-cyan); }
     html [data-slot="card-title"] { letter-spacing: .02em; }
+    @media (prefers-contrast: more), (prefers-reduced-transparency: reduce), (forced-colors: active) {
+      html.dark body { background-image: linear-gradient(var(--yuna-ark-grid) 1px, transparent 1px), linear-gradient(90deg, var(--yuna-ark-grid) 1px, transparent 1px); background-size: 48px 48px; }
+    }
   `,
   scarlet: `
     html [data-slot="card"] { border-color: var(--yuna-scarlet-frame); box-shadow: inset 0 0 0 4px var(--card), inset 0 0 0 5px var(--yuna-scarlet-frame); }
     html [data-slot="card-header"] { padding-top: 4px; }
     html [data-slot="card-title"] { color: var(--yuna-scarlet-gold); }
     html [data-slot="sidebar-header"] { border-color: var(--yuna-scarlet-frame); }
+  `,
+  scarlet2: `
+    html:not(.dark) body {
+      background-image:
+        radial-gradient(ellipse 68% 48% at 86% 6%, rgba(156, 20, 56, .15), transparent 58%),
+        radial-gradient(ellipse 52% 42% at 10% 86%, rgba(74, 96, 120, .11), transparent 55%);
+    }
+    html.dark body {
+      background-image:
+        radial-gradient(ellipse 70% 50% at 85% 4%, rgba(184, 29, 68, .24), transparent 56%),
+        radial-gradient(ellipse 55% 45% at 8% 88%, rgba(166, 190, 214, .09), transparent 54%);
+    }
+    html [data-slot="card"] {
+      border-color: var(--yuna-scarlet-frame);
+      border-radius: 4px;
+      box-shadow:
+        inset 0 0 0 5px var(--card),
+        inset 0 0 0 6px color-mix(in srgb, var(--yuna-scarlet-frame) 48%, transparent),
+        0 10px 26px rgba(33, 12, 20, .08);
+    }
+    html.dark [data-slot="card"] {
+      box-shadow:
+        inset 0 0 0 5px var(--card),
+        inset 0 0 0 6px color-mix(in srgb, var(--yuna-scarlet-frame) 55%, transparent),
+        0 14px 34px rgba(0, 0, 0, .38);
+    }
+    html [data-slot="card-header"] { padding-top: 4px; }
+    html [data-slot="card-title"] { color: var(--yuna-scarlet-gold); letter-spacing: .04em; }
+    html [data-slot="sidebar-header"] { border-color: var(--yuna-scarlet-frame); }
+    html [data-slot="sidebar-menu-button"][data-active="true"] {
+      box-shadow: inset 3px 0 var(--yuna-remilia-crimson), inset 5px 0 var(--yuna-scarlet-gold);
+      color: var(--yuna-scarlet-gold);
+    }
+    html [data-slot="table-header"] { border-bottom: 2px solid var(--yuna-scarlet-frame); }
+    html.dark [data-slot="table-header"] { background: var(--yuna-s2-velvet); }
+    html [data-slot="table-head"] { color: var(--yuna-scarlet-gold); letter-spacing: .1em; text-transform: uppercase; }
+    html [data-slot="table-row"]:has(td):is(:hover, :focus-within) td:first-child {
+      box-shadow: inset 4px 0 var(--yuna-remilia-crimson), inset 6px 0 var(--yuna-scarlet-gold);
+    }
+    html [data-slot="button"][data-variant="default"]:not(:disabled):hover {
+      background: linear-gradient(135deg, #5a0e25, #2e0714);
+      border-color: var(--yuna-scarlet-gold);
+      color: var(--yuna-s2-ivory);
+    }
+    html [data-slot="button"]:is([data-variant="outline"], [data-variant="secondary"]) {
+      border-color: var(--yuna-scarlet-frame);
+    }
+    html :is([data-slot="dialog-content"], [data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="select-content"]) {
+      border-color: var(--yuna-scarlet-frame);
+      box-shadow:
+        0 16px 36px rgba(14, 5, 9, .28),
+        inset 0 0 0 3px var(--popover),
+        inset 0 0 0 4px color-mix(in srgb, var(--yuna-scarlet-frame) 35%, transparent);
+    }
+    @media (prefers-contrast: more), (prefers-reduced-transparency: reduce), (forced-colors: active) {
+      html body { background-image: none; }
+    }
   `,
 }
 
