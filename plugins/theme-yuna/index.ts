@@ -12,6 +12,7 @@ export const definition = definePlugin({
       ["102", "YUNA · 102"],
       ["arknights", "YUNA · 明日方舟"],
       ["scarlet", "YUNA · 红魔馆"],
+      ["scarlet2", "YUNA · 红魔馆 2.0"],
     ] as const) {
       ctx.ui.registerTheme({ id, name, css: createThemeCss(id, (path) => ctx.assets.url(path)) })
     }

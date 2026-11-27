@@ -1,0 +1,13 @@
+{
+  "id": "community.campus-charge",
+  "name": "校园充电",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "kind": "feature",
+  "inject": ["ui", "slots", "router", "i18n", "http", "storage"],
+  "entry": "dist/index.js",
+  "categories": ["campus"],
+  "providerIndependent": true,
+  "description": "个人 Token 直连查询东区 A01–A20 充电桩空闲端口（仅限东区），支持常用收藏、本地端口备注与完整 Token 获取引导。",
+  "author": "Orahako Community"
+}
