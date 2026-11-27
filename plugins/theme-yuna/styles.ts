@@ -336,10 +336,21 @@ const structure: Record<YunaSkin, string> = {
     }
   `,
   scarlet: `
-    html.dark body {
+    html:not(.dark) body {
+      min-height: 100dvh;
       background-image:
-        radial-gradient(ellipse 64% 46% at 86% 6%, rgba(164, 33, 65, .18), transparent 58%),
-        radial-gradient(ellipse 50% 42% at 10% 88%, rgba(223, 190, 130, .09), transparent 55%);
+        radial-gradient(ellipse 80% 50% at 88% 6%, rgba(164, 33, 65, .14), transparent 58%),
+        radial-gradient(ellipse 70% 48% at 10% 88%, rgba(174, 129, 83, .14), transparent 58%),
+        linear-gradient(155deg, #fbf1e7 0%, #f6e6dc 52%, #efe0d9 100%);
+      background-attachment: fixed;
+    }
+    html.dark body {
+      min-height: 100dvh;
+      background-image:
+        radial-gradient(ellipse 85% 55% at 88% 8%, rgba(196, 48, 86, .36), transparent 62%),
+        radial-gradient(ellipse 75% 50% at 12% 86%, rgba(223, 190, 130, .18), transparent 60%),
+        linear-gradient(155deg, #431727 0%, #2b1019 48%, #1e0a12 100%);
+      background-attachment: fixed;
     }
     html [data-slot="card"] { border-color: var(--yuna-scarlet-frame); box-shadow: inset 0 0 0 4px var(--card), inset 0 0 0 5px var(--yuna-scarlet-frame); }
     html [data-slot="card-header"] { padding-top: 4px; }
@@ -373,19 +384,25 @@ const structure: Record<YunaSkin, string> = {
       }
     }
     @media (prefers-contrast: more), (prefers-reduced-transparency: reduce), (forced-colors: active) {
-      html.dark body { background-image: none; }
+      html body { background-image: none; }
     }
   `,
   scarlet2: `
     html:not(.dark) body {
+      min-height: 100dvh;
       background-image:
-        radial-gradient(ellipse 68% 48% at 86% 6%, rgba(156, 20, 56, .15), transparent 58%),
-        radial-gradient(ellipse 52% 42% at 10% 86%, rgba(74, 96, 120, .11), transparent 55%);
+        radial-gradient(ellipse 72% 50% at 86% 6%, rgba(156, 20, 56, .16), transparent 58%),
+        radial-gradient(ellipse 58% 45% at 10% 86%, rgba(74, 96, 120, .12), transparent 56%),
+        linear-gradient(160deg, #f8f0e8 0%, #f1e5dc 52%, #e9dbd3 100%);
+      background-attachment: fixed;
     }
     html.dark body {
+      min-height: 100dvh;
       background-image:
-        radial-gradient(ellipse 70% 50% at 85% 4%, rgba(184, 29, 68, .24), transparent 56%),
-        radial-gradient(ellipse 55% 45% at 8% 88%, rgba(166, 190, 214, .09), transparent 54%);
+        radial-gradient(ellipse 80% 55% at 86% 6%, rgba(204, 38, 80, .34), transparent 60%),
+        radial-gradient(ellipse 68% 48% at 10% 88%, rgba(166, 190, 214, .14), transparent 58%),
+        linear-gradient(160deg, #2d0d1a 0%, #190810 50%, #100409 100%);
+      background-attachment: fixed;
     }
     html [data-slot="card"] {
       border-color: var(--yuna-scarlet-frame);

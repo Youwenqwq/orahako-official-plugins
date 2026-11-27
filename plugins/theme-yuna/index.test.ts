@@ -36,7 +36,7 @@ function createContext() {
 describe("community.theme.yuna", () => {
   it("declares an API v1 theme manifest", () => {
     expect(manifest.id).toBe("community.theme.yuna")
-    expect(manifest.version).toBe("1.2.1")
+    expect(manifest.version).toBe("1.2.2")
     expect(manifest.apiVersion).toBe(PLUGIN_API_VERSION)
     expect(manifest.kind).toBe("theme")
     expect(manifest.minAppVersion).toBeUndefined()
@@ -100,20 +100,23 @@ describe("community.theme.yuna", () => {
     expect(arknights.css).toContain("color: var(--ark-card-accent);")
     expect(arknights.css).toContain("background: var(--yuna-ark-highlight);")
 
-    // Scarlet: wine + antique gold + dark crimson/gold ambient glow + mobile frame convergence
+    // Scarlet: wine + antique gold + visible crimson/gold gradient + mobile frame convergence
     const scarlet = registered.find((theme) => theme.id === "scarlet")!
+    expect(scarlet.css).toContain("--yuna-bg: #2b1019;")
     expect(scarlet.css).toContain("--yuna-pink: #926229;")
     expect(scarlet.css).toContain("--yuna-pink: #dfbe82;")
-    expect(scarlet.css).toContain("rgba(164, 33, 65, .18)")
+    expect(scarlet.css).toContain("linear-gradient(155deg, #431727 0%, #2b1019 48%, #1e0a12 100%)")
+    expect(scarlet.css).toContain("background-attachment: fixed;")
     expect(scarlet.css).toContain("inset 0 0 0 2px var(--card)")
 
-    // Scarlet 2.0: crimson + royal gold + sakuya silver icons/ticks + wax-seal badges + mobile frame convergence
+    // Scarlet 2.0: crimson + royal gold + sakuya silver icons/ticks + wax-seal badges + visible gradient
     const scarlet2 = registered.find((theme) => theme.id === "scarlet2")!
     expect(scarlet2.css).toContain("--yuna-bg: #f4ece4;")
-    expect(scarlet2.css).toContain("--yuna-bg: #0e0509;")
+    expect(scarlet2.css).toContain("--yuna-bg: #16070d;")
     expect(scarlet2.css).toContain("--yuna-sakuya-silver: #4a6078;")
     expect(scarlet2.css).toContain("--yuna-remilia-crimson: #e34b6f;")
-    expect(scarlet2.css).toContain("--yuna-s2-velvet: #220812;")
+    expect(scarlet2.css).toContain("--yuna-s2-velvet: #290b16;")
+    expect(scarlet2.css).toContain("linear-gradient(160deg, #2d0d1a 0%, #190810 50%, #100409 100%)")
     expect(scarlet2.css).toContain("color: var(--yuna-sakuya-silver);")
     expect(scarlet2.css).toContain("inset 0 2px 0 var(--yuna-remilia-crimson), inset 0 4px 0 var(--yuna-scarlet-gold)")
 
