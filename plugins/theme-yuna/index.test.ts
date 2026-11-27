@@ -39,6 +39,8 @@ describe("community.theme.yuna", () => {
     expect(manifest.version).toBe("1.1.0")
     expect(manifest.apiVersion).toBe(PLUGIN_API_VERSION)
     expect(manifest.kind).toBe("theme")
+    expect(manifest.minAppVersion).toBeUndefined()
+    expect(manifest.providerIndependent).toBe(true)
     expect(manifest.inject).toEqual(["ui", "assets"])
     expect(manifest.entry).toBe("dist/index.js")
     expect(definition.inject).toEqual(["ui", "assets"])

@@ -6,6 +6,8 @@
   "kind": "theme",
   "inject": ["ui", "assets"],
   "entry": "dist/index.js",
+  "categories": ["theme"],
+  "providerIndependent": true,
   "description": "基于 YUNA 设计规范（2026-11-27）的 102、明日方舟、红魔馆与红魔馆 2.0 皮肤，均支持浅色、深色与跟随系统。",
   "author": "QS-Ling"
 }
