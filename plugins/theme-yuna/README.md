@@ -31,6 +31,6 @@
 pnpm build:plugin -- community.theme.yuna
 ```
 
-构建后 ZIP 输出到 `artifacts/community.theme.yuna-1.2.0.zip`，可通过插件管理直接导入或通过 `orahako-plugin-registry` 的 `ingest` 脚本发布。
+构建后 ZIP 输出到 `artifacts/community.theme.yuna-1.2.1.zip`，可通过插件管理直接导入或通过 `orahako-plugin-registry` 的 `ingest` 脚本发布。
 
 本地拉丁字形 Archivo 与 Barlow Condensed 来自规范参考包，许可证随字体放在 `assets/fonts/`（SIL OFL）。中文使用可用的 Noto Sans SC / 系统字体；红魔馆与红魔馆 2.0 使用系统衬线回退。没有附带角色或第三方品牌图片。

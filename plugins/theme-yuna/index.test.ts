@@ -36,7 +36,7 @@ function createContext() {
 describe("community.theme.yuna", () => {
   it("declares an API v1 theme manifest", () => {
     expect(manifest.id).toBe("community.theme.yuna")
-    expect(manifest.version).toBe("1.2.0")
+    expect(manifest.version).toBe("1.2.1")
     expect(manifest.apiVersion).toBe(PLUGIN_API_VERSION)
     expect(manifest.kind).toBe("theme")
     expect(manifest.minAppVersion).toBeUndefined()
@@ -77,6 +77,11 @@ describe("community.theme.yuna", () => {
       expect(theme.css).toContain("env(safe-area-inset-bottom, 0px)")
       expect(theme.css).toContain("100dvh")
       expect(theme.css).toContain("scroll-snap-type: x proximity;")
+      // Solid default badges must keep primary-foreground contrast and never get accent-on-primary overrides
+      expect(theme.css).toContain('html [data-slot="badge"][data-variant="default"]')
+      expect(theme.css).toContain("color: var(--primary-foreground);")
+      expect(theme.css).toContain('html [data-slot="badge"]:is([data-variant="secondary"], [data-variant="outline"])')
+      expect(theme.css).not.toContain('[data-slot="badge"]:not([data-variant="destructive"])')
     }
 
     // 102: blue + pink + category bottom strips, mobile shadow convergence

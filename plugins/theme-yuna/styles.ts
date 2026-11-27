@@ -55,6 +55,11 @@ function palette(skin: YunaSkin, mode: "light" | "dark") {
     --sidebar-accent-foreground: var(--yuna-blue);
     --sidebar-border: var(--yuna-line);
     --sidebar-ring: var(--yuna-blue);
+    --chart-1: var(--yuna-blue);
+    --chart-2: var(--yuna-blue-soft);
+    --chart-3: var(--yuna-accent-2);
+    --chart-4: var(--primary);
+    --chart-5: var(--yuna-muted);
     --radius: ${radius};
     --font-sans: ${sans};
     --font-heading: ${heading};
@@ -81,6 +86,11 @@ html [data-shell-bottom-nav] { border-top: 1px solid var(--border); padding-bott
 html [data-shell-bottom-nav] a { font-size: max(11px, 0.6875rem); line-height: 1.25; min-height: 48px; }
 html [data-shell-bottom-nav] a[aria-current="page"] { box-shadow: inset 0 2.5px 0 var(--primary); color: var(--primary); font-weight: 700; }
 html [data-slot="badge"] { font-size: max(11px, 0.6875rem); }
+html [data-slot="badge"][data-variant="default"] {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid transparent;
+}
 html [data-slot="table-container"] { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 html [data-slot="table-header"] { background: var(--secondary); border-bottom: 1.5px solid var(--yuna-accent-2); }
 html [data-slot="table-head"] { color: var(--primary); }
@@ -249,9 +259,12 @@ const structure: Record<YunaSkin, string> = {
     html [data-slot="card"]:nth-of-type(3n) { --yuna-card-accent: var(--yuna-blue-soft); }
     html [data-slot="card-header"] svg { color: var(--yuna-card-accent); }
     html [data-slot="card-title"] { color: var(--foreground); }
-    html [data-slot="badge"]:not([data-variant="destructive"]) {
+    html [data-slot="badge"]:is([data-variant="secondary"], [data-variant="outline"]) {
       border: 1px solid color-mix(in srgb, var(--yuna-pink) 45%, var(--border));
       color: var(--yuna-pink);
+    }
+    html:not(.dark) [data-slot="badge"]:is([data-variant="secondary"], [data-variant="outline"]) {
+      color: color-mix(in srgb, var(--yuna-pink) 70%, var(--foreground));
     }
     html [data-slot="sidebar-menu-button"][data-active="true"] {
       box-shadow: inset 3px 0 var(--yuna-pink);
@@ -310,9 +323,12 @@ const structure: Record<YunaSkin, string> = {
       box-shadow: inset 0 2.5px 0 var(--yuna-ark-highlight);
       color: var(--yuna-blue);
     }
-    html [data-slot="badge"]:not([data-variant="destructive"]) {
+    html [data-slot="badge"]:is([data-variant="secondary"], [data-variant="outline"]) {
       border: 1px solid color-mix(in srgb, var(--yuna-ark-accent-lime) 55%, var(--border));
       color: var(--yuna-ark-accent-lime);
+    }
+    html:not(.dark) [data-slot="badge"]:is([data-variant="secondary"], [data-variant="outline"]) {
+      color: color-mix(in srgb, var(--yuna-ark-accent-lime) 70%, var(--foreground));
     }
     html [data-slot="progress-indicator"] { background: var(--yuna-ark-lime); }
     @media (prefers-contrast: more), (prefers-reduced-transparency: reduce), (forced-colors: active) {
@@ -344,9 +360,12 @@ const structure: Record<YunaSkin, string> = {
       color: var(--primary);
     }
     html [data-shell-bottom-nav] a[aria-current="page"] svg { color: var(--yuna-scarlet-gold); }
-    html [data-slot="badge"]:not([data-variant="destructive"]) {
+    html [data-slot="badge"]:is([data-variant="secondary"], [data-variant="outline"]) {
       border: 1px solid var(--yuna-scarlet-frame);
       color: var(--yuna-scarlet-gold);
+    }
+    html:not(.dark) [data-slot="badge"]:is([data-variant="secondary"], [data-variant="outline"]) {
+      color: color-mix(in srgb, var(--yuna-scarlet-gold) 70%, var(--foreground));
     }
     @media (max-width: 700px) {
       html [data-slot="card"] {
@@ -392,10 +411,13 @@ const structure: Record<YunaSkin, string> = {
       color: var(--yuna-scarlet-gold);
     }
     html [data-slot="separator"] { background-color: color-mix(in srgb, var(--yuna-sakuya-silver) 38%, var(--border)); }
-    html [data-slot="badge"]:not([data-variant="destructive"]) {
+    html [data-slot="badge"]:is([data-variant="secondary"], [data-variant="outline"]) {
       border: 1px solid var(--yuna-remilia-crimson);
-      box-shadow: inset 3px 0 0 var(--yuna-remilia-crimson);
+      box-shadow: inset 2px 0 0 var(--yuna-remilia-crimson);
       color: var(--yuna-scarlet-gold);
+    }
+    html:not(.dark) [data-slot="badge"]:is([data-variant="secondary"], [data-variant="outline"]) {
+      color: color-mix(in srgb, var(--yuna-scarlet-gold) 70%, var(--foreground));
     }
     html [data-shell-header] { border-bottom: 1px solid var(--yuna-scarlet-frame); }
     html [data-shell-bottom-nav] { border-top: 1px solid var(--yuna-scarlet-frame); }
