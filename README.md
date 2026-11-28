@@ -81,27 +81,10 @@ and prints its exact size and SHA-256.
 
 ## Publishing
 
-GitHub Releases preserve tagged builds and checksums for maintainers. Public
-installation uses the reviewed bytes committed to the registry:
-
-1. Build the plugin to produce `artifacts/<id>-<version>.zip`.
-2. In `orahako-plugin-registry`, ingest the built ZIP and validate offline:
-
-   ```sh
-   pnpm run ingest ../orahako-official-plugins/artifacts/<id>-<version>.zip --changelog "..."
-   pnpm run validate
-   ```
-
-   For a brand-new plugin, also pass `--source-path plugins/<dir>` (and any
-   display overrides such as `--summary` or `--categories` if not in
-   `manifest.json`).
-3. Commit the updated `plugins/<id>.json`, generated `dist/plugins.json`, and
-   `dist/plugins/<id>/<version>.zip` together.
-4. After the registry reaches `main`, clients read the new index and ZIPs
-   directly from `raw.githubusercontent.com`.
-
-A published `<id>@<version>` is immutable. Never replace its registry asset;
-bump the version for changed code.
+> **Never commit directly to `Youwenqwq/orahako-plugin-registry`'s `main` branch.**
+> All releases must go through tags in this repository so `release-plugin.yml`
+> can publish an immutable GitHub Release and automatically open a reviewed
+> ingest Pull Request in `orahako-plugin-registry`.
 
 Tags in this repository use `<plugin-id>@<version>` and must exactly match one
 manifest:
@@ -113,9 +96,13 @@ git push origin orahako.skbird@1.0.1
 ```
 
 The tag workflow checks that the version is absent from the public registry,
-builds the tagged plugin, and creates a GitHub Release containing the ZIP and
-SHA-256. Registry publication remains a separate reviewed commit so the exact
-public bytes are validated offline before release.
+runs tests, builds the tagged plugin, creates a GitHub Release containing the
+ZIP and SHA-256, and dispatches `ingest-plugin.yml` in `orahako-plugin-registry`
+to open a Pull Request. After review and merge, clients receive the new index
+and ZIPs via jsDelivr (with automatic fallback to GitHub Raw).
+
+A published `<id>@<version>` is immutable. Never replace or edit an already
+published registry entry; bump the plugin version for changed code.
 
 ## CI
 
