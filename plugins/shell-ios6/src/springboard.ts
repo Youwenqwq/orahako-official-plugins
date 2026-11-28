@@ -1,17 +1,32 @@
 import type { ComponentType } from "react"
+import type { Ios6StatusBarMode } from "./store"
 
 export const IOS6_ICON_KINDS = [
   "calendar",
+  "timetable",
   "overview",
   "grades",
+  "trophy",
+  "star",
+  "clock",
+  "reminders",
+  "ibooks",
   "notes",
   "passbook",
+  "wallet",
+  "meter",
+  "charge",
   "maps",
   "messages",
   "mail",
   "safari",
+  "compass",
+  "weather",
+  "camera",
+  "music",
   "appstore",
   "settings",
+  "idcard",
   "contacts",
   "power",
   "folder",
@@ -61,69 +76,134 @@ export interface SpringBoardGridConfig {
 export function resolveIos6IconKind(hint: {
   readonly pluginId?: string
   readonly id?: string
+  readonly title?: string
   readonly icon?: string
   readonly group?: string
 }): Ios6IconKind {
-  const key = `${hint.pluginId ?? ""} ${hint.id ?? ""} ${hint.icon ?? ""}`.toLowerCase()
+  const key = `${hint.pluginId ?? ""} ${hint.id ?? ""} ${hint.title ?? ""} ${hint.icon ?? ""}`.toLowerCase()
 
-  if (key.includes("overview") || key.includes("home") || key.includes("layout-dashboard")) {
+  if (key.includes("overview") || key.includes("总览") || key.includes("layout-dashboard")) {
     return "overview"
   }
-  if (key.includes("schedule") || key.includes("timetable") || key.includes("calendar")) {
+  // Distinguish "school-schedule" (全校课表) from personal "schedule" (课程表)
+  if (
+    key.includes("school-schedule") ||
+    key.includes("school_schedule") ||
+    key.includes("全校课表") ||
+    key.includes("校历")
+  ) {
+    return "timetable"
+  }
+  if (key.includes("schedule") || key.includes("课表") || key.includes("calendar")) {
     return "calendar"
   }
+  // Distinguish "makeup-exams" (补考) from regular "exams" (考试)
   if (
-    key.includes("grade") ||
-    key.includes("credit") ||
-    key.includes("comprehensive") ||
-    key.includes("award") ||
-    key.includes("trophy")
+    key.includes("makeup") ||
+    key.includes("补考") ||
+    key.includes("缓考") ||
+    key.includes("reminder") ||
+    key.includes("待办")
   ) {
+    return "reminders"
+  }
+  if (key.includes("exam") || key.includes("考试") || key.includes("clock") || key.includes("倒计时")) {
+    return "clock"
+  }
+  // Distinguish "comprehensive" (综合测评) and "credits" (双创学分) from "grades" (成绩)
+  if (key.includes("comprehensive") || key.includes("综测") || key.includes("综合测评")) {
+    return "trophy"
+  }
+  if (key.includes("credit") || key.includes("双创") || key.includes("学分")) {
+    return "star"
+  }
+  if (key.includes("grade") || key.includes("成绩") || key.includes("gpa")) {
     return "grades"
   }
+  // Distinguish "training-plan" (培养方案) from "labor" (劳动教育)
   if (
-    key.includes("exam") ||
     key.includes("training-plan") ||
-    key.includes("labor") ||
-    key.includes("note") ||
-    key.includes("clock")
+    key.includes("training_plan") ||
+    key.includes("培养方案") ||
+    key.includes("book")
   ) {
+    return "ibooks"
+  }
+  if (key.includes("labor") || key.includes("劳动") || key.includes("note") || key.includes("备忘")) {
     return "notes"
+  }
+  // Distinguish "campus-charge" (校园充电), "meter" (空调电费), "epay" (缴费), "ecard" (一卡通)
+  if (key.includes("campus-charge") || key.includes("充电") || key.includes("battery")) {
+    return "charge"
+  }
+  if (key.includes("meter") || key.includes("电费") || key.includes("水电") || key.includes("空调")) {
+    return "meter"
+  }
+  if (key.includes("epay") || key.includes("缴费") || key.includes("支付") || key.includes("pay")) {
+    return "wallet"
   }
   if (
     key.includes("ecard") ||
-    key.includes("epay") ||
-    key.includes("meter") ||
-    key.includes("wallet") ||
-    key.includes("fee") ||
-    key.includes("charge")
+    key.includes("一卡通") ||
+    key.includes("校园卡") ||
+    key.includes("passbook")
   ) {
     return "passbook"
   }
-  if (key.includes("room") || key.includes("building") || key.includes("map")) {
+  if (
+    key.includes("free-room") ||
+    key.includes("room") ||
+    key.includes("building") ||
+    key.includes("空教室") ||
+    key.includes("map")
+  ) {
     return "maps"
   }
   if (
     key.includes("notification") ||
     key.includes("announcement") ||
-    key.includes("skbird") ||
+    key.includes("通知") ||
+    key.includes("公告") ||
     key.includes("message") ||
     key.includes("bell")
   ) {
     return "messages"
   }
-  if (key.includes("evaluation") || key.includes("mail")) {
+  if (key.includes("evaluation") || key.includes("评教") || key.includes("评价") || key.includes("mail")) {
     return "mail"
   }
-  if (key.includes("plugin") || key.includes("puzzle") || key.includes("package") || key.includes("store")) {
+  if (key.includes("skbird") || key.includes("森空") || key.includes("compass") || key.includes("指南针")) {
+    return "compass"
+  }
+  if (key.includes("weather") || key.includes("天气")) {
+    return "weather"
+  }
+  if (key.includes("camera") || key.includes("相机") || key.includes("扫码") || key.includes("scan")) {
+    return "camera"
+  }
+  if (key.includes("music") || key.includes("音乐")) {
+    return "music"
+  }
+  if (
+    key.includes("plugin") ||
+    key.includes("插件") ||
+    key.includes("puzzle") ||
+    key.includes("package") ||
+    key.includes("store")
+  ) {
     return "appstore"
   }
-  if (key.includes("setting") || key.includes("cog") || key.includes("sliders") || key.includes("display")) {
+  if (key.includes("setting") || key.includes("设置") || key.includes("cog") || key.includes("sliders")) {
     return "settings"
+  }
+  // Distinguish "student-info" (学生信息) from "profile" (我的)
+  if (key.includes("student-info") || key.includes("student_info") || key.includes("学生信息") || key.includes("学籍")) {
+    return "idcard"
   }
   if (
     key.includes("profile") ||
-    key.includes("student") ||
+    key.includes("我的") ||
+    key.includes("个人") ||
     key.includes("user") ||
     key.includes("auth") ||
     key.includes("contact")
@@ -133,10 +213,75 @@ export function resolveIos6IconKind(hint: {
   if (key.includes("browser") || key.includes("safari") || key.includes("web")) {
     return "safari"
   }
-  if (hint.group === "fees") return "passbook"
+  if (hint.group === "fees") return "wallet"
   if (hint.group === "account") return "contacts"
   if (hint.group === "plugins") return "appstore"
+  if (hint.group === "academic") return "ibooks"
   return "default"
+}
+
+export function resolveEffectiveShowStatusBar(params: {
+  readonly statusBarMode: Ios6StatusBarMode | undefined
+  readonly legacyShowStatusBar?: boolean
+  readonly hasNativeSafeAreaTop: boolean
+  readonly isIphoneFrame: boolean
+}): boolean {
+  const mode: Ios6StatusBarMode =
+    params.statusBarMode ?? (params.legacyShowStatusBar === false ? "off" : "auto")
+  if (mode === "off") return false
+  if (mode === "always") return true
+  if (params.isIphoneFrame) return true
+  return !params.hasNativeSafeAreaTop
+}
+
+export function computeSpringboardSwipe(params: {
+  readonly deltaX: number
+  readonly currentPage: number
+  readonly totalPages: number
+  readonly containerWidth: number
+  readonly velocityPxPerMs?: number
+}): {
+  readonly visualOffsetPx: number
+  readonly nextPage: number
+  readonly openSpotlight: boolean
+} {
+  const { deltaX, currentPage, totalPages, containerWidth, velocityPxPerMs = 0 } = params
+  const safeTotal = Math.max(1, totalPages)
+  const safePage = Math.min(Math.max(0, currentPage), safeTotal - 1)
+  const safeWidth = Math.max(240, containerWidth)
+
+  if (safePage === 0 && deltaX > 0) {
+    const spotlightThreshold = Math.min(92, Math.max(56, safeWidth * 0.24))
+    return {
+      visualOffsetPx: deltaX * 0.35,
+      nextPage: 0,
+      openSpotlight: deltaX >= spotlightThreshold,
+    }
+  }
+
+  if (safePage === safeTotal - 1 && deltaX < 0) {
+    return {
+      visualOffsetPx: deltaX * 0.28,
+      nextPage: safePage,
+      openSpotlight: false,
+    }
+  }
+
+  const distanceThreshold = Math.min(80, Math.max(42, safeWidth * 0.18))
+  const isFlick = Math.abs(velocityPxPerMs) >= 0.32 && Math.abs(deltaX) >= 24
+
+  let nextPage = safePage
+  if (deltaX <= -distanceThreshold || (deltaX < 0 && isFlick)) {
+    nextPage = Math.min(safeTotal - 1, safePage + 1)
+  } else if (deltaX >= distanceThreshold || (deltaX > 0 && isFlick)) {
+    nextPage = Math.max(0, safePage - 1)
+  }
+
+  return {
+    visualOffsetPx: deltaX,
+    nextPage,
+    openSpotlight: false,
+  }
 }
 
 export function resolveGridConfig(
@@ -322,6 +467,6 @@ export function writeSessionUnlocked(
       target.removeItem(SESSION_UNLOCK_KEY)
     }
   } catch {
-    // Ignore restricted storage environments
+    // Ignore storage errors
   }
 }

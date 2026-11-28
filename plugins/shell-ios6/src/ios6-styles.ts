@@ -10,6 +10,12 @@ export const IOS6_GLOBAL_CSS = `
   color: #ffffff;
 }
 
+/* Hide empty banner slot wrapper completely when slot contributions render null */
+.ios6-banner-host:empty,
+.ios6-banner-host:not(:has(*)) {
+  display: none !important;
+}
+
 .ios6-desktop-stage {
   background-color: #212429;
   background-image:
@@ -188,7 +194,7 @@ export const IOS6_GLOBAL_CSS = `
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.92), 0 0 4px rgba(0, 0, 0, 0.55);
 }
 
-/* 3D Perspective Frosted Glass Dock */
+/* 3D Perspective Frosted Glass Dock & Classic Icon Reflection */
 .ios6-dock-shelf {
   position: relative;
 }
@@ -199,21 +205,29 @@ export const IOS6_GLOBAL_CSS = `
   left: -4%;
   right: -4%;
   bottom: 0;
-  height: calc(54px + var(--ios6-dock-safe-bottom, 0px));
+  height: calc(64px + var(--ios6-dock-safe-bottom, 0px));
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.48) 0%,
-    rgba(225, 232, 240, 0.3) 14%,
-    rgba(162, 174, 188, 0.28) 55%,
-    rgba(88, 98, 110, 0.44) 100%
+    rgba(255, 255, 255, 0.52) 0%,
+    rgba(225, 232, 240, 0.32) 16%,
+    rgba(162, 174, 188, 0.28) 58%,
+    rgba(88, 98, 110, 0.46) 100%
   );
-  border-top: 1px solid rgba(255, 255, 255, 0.68);
+  border-top: 1px solid rgba(255, 255, 255, 0.72);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.54),
     0 -2px 10px rgba(0, 0, 0, 0.35);
   transform: perspective(360px) rotateX(28deg);
   transform-origin: bottom center;
   pointer-events: none;
+}
+
+.ios6-dock-reflection {
+  pointer-events: none;
+  opacity: 0.42;
+  filter: blur(0.3px);
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.25) 55%, transparent 100%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.25) 55%, transparent 100%);
 }
 
 /* Classic UINavigationBar */
@@ -248,6 +262,65 @@ export const IOS6_GLOBAL_CSS = `
   background: linear-gradient(180deg, #62a5f5 0%, #266dd2 50%, #1c5bc0 52%, #2b6cd3 100%);
   border: 1px solid #133c7f;
 }
+
+/* Classic iOS 6 Light Content Theme Tokens (harmonizes plugin pages with brushed blue UINavigationBar) */
+.ios6-light-viewport,
+html[data-orahako-shell="ios6"][data-ios6-light-content="true"] :is(
+  [data-slot="dialog-content"],
+  [data-slot="drawer-content"],
+  [data-slot="popover-content"],
+  [data-slot="select-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="sheet-content"]
+) {
+  color-scheme: light;
+  --background: #eef1f5;
+  --foreground: #1a212b;
+  --card: #ffffff;
+  --card-foreground: #1a212b;
+  --popover: #ffffff;
+  --popover-foreground: #1a212b;
+  --primary: #1f64c7;
+  --primary-foreground: #ffffff;
+  --secondary: #e1e7ef;
+  --secondary-foreground: #1e293b;
+  --muted: #e4e9f0;
+  --muted-foreground: #546070;
+  --accent: #dbe6f5;
+  --accent-foreground: #153e7a;
+  --destructive: #cf2a20;
+  --border: #c6ced8;
+  --input: #cdd5e0;
+  --ring: #387ee0;
+  --chart-1: #256ad0;
+  --chart-2: #3da34d;
+  --chart-3: #e08620;
+  --chart-4: #7b5cd6;
+  --chart-5: #5a6b82;
+  --schedule-1: oklch(0.88 0.06 148);
+  --schedule-2: oklch(0.94 0.03 153);
+  --schedule-3: oklch(0.95 0.06 99);
+  --schedule-4: oklch(0.93 0.04 60);
+  --schedule-5: oklch(0.88 0.06 11);
+  --schedule-6: oklch(0.88 0.05 308);
+  --schedule-7: oklch(0.88 0.05 254);
+  --schedule-8: oklch(0.88 0.06 241);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.ios6-light-viewport [data-slot="card"] {
+  box-shadow: 0 1px 2px rgba(24, 34, 52, 0.06);
+}
+
+html.dark .ios6-light-viewport .dark\\:text-emerald-300 { color: #047857; }
+html.dark .ios6-light-viewport .dark\\:text-amber-300 { color: #b45309; }
+html.dark .ios6-light-viewport .dark\\:text-sky-300 { color: #0369a1; }
+html.dark .ios6-light-viewport .dark\\:text-orange-300,
+html.dark .ios6-light-viewport .dark\\:text-orange-400 { color: #c2410c; }
+html.dark .ios6-light-viewport .dark\\:text-red-300 { color: #b91c1c; }
+html.dark .ios6-light-viewport .dark\\:text-blue-300 { color: #1d4ed8; }
+html.dark .ios6-light-viewport .dark\\:text-white { color: #1a212b; }
 
 /* Classic Grouped UITableView Pin-Stripe Background */
 .ios6-pinstripe-bg {

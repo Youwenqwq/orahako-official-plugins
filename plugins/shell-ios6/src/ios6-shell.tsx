@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react"
@@ -30,8 +31,10 @@ import { Ios6Spotlight } from "./ios6-spotlight"
 import { Ios6StatusBar } from "./ios6-status-bar"
 import { IOS6_GLOBAL_CSS } from "./ios6-styles"
 import {
+  computeSpringboardSwipe,
   partitionSpringBoardApps,
   readSessionUnlocked,
+  resolveEffectiveShowStatusBar,
   resolveGridConfig,
   resolveIos6IconKind,
   writeSessionUnlocked,
@@ -151,18 +154,23 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
   const wallpaper = useStore((s) => s.wallpaper)
   const lockScreenEnabled = useStore((s) => s.lockScreenEnabled)
   const rememberUnlockState = useStore((s) => s.rememberUnlockState)
-  const showStatusBar = useStore((s) => s.showStatusBar)
+  const legacyShowStatusBar = useStore((s) => s.showStatusBar)
+  const statusBarMode = useStore((s) => s.statusBarMode)
+  const lightThemeContent = useStore((s) => s.lightThemeContent) ?? true
   const desktopMode = useStore((s) => s.desktopMode)
   const showBadges = useStore((s) => s.showBadges)
   const showSpotlight = useStore((s) => s.showSpotlight)
 
   const [viewport, setViewport] = useState<ViewportSize>(readViewport)
+  const [hasNativeSafeAreaTop, setHasNativeSafeAreaTop] = useState(false)
   const [locked, setLocked] = useState<boolean>(() => {
     if (!lockScreenEnabled) return false
     if (rememberUnlockState && readSessionUnlocked()) return false
     return true
   })
   const [currentPage, setCurrentPage] = useState(0)
+  const [swipeDragOffsetPx, setSwipeDragOffsetPx] = useState(0)
+  const [isSwipingHorizontal, setIsSwipingHorizontal] = useState(false)
   const [spotlightOpen, setSpotlightOpen] = useState(false)
   const [spotlightQuery, setSpotlightQuery] = useState("")
   const [activeView, setActiveView] = useState<ActiveIos6View>({ kind: "springboard" })
@@ -170,31 +178,100 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
   const lastSyncedHrefRef = useRef<string | null>(null)
   const bootHandledRef = useRef(false)
   const initialHrefRef = useRef<string>(location.href)
-  const swipeStartXRef = useRef<number | null>(null)
+  const safeTopProbeRef = useRef<HTMLDivElement | null>(null)
+  const springboardTrackRef = useRef<HTMLDivElement | null>(null)
+  const suppressNextAppClickRef = useRef(false)
+  const swipeStateRef = useRef<{
+    pointerId: number | null
+    startX: number
+    startY: number
+    startTime: number
+    lastX: number
+    lastTime: number
+    lockedAxis: "none" | "horizontal" | "vertical"
+    containerWidth: number
+  }>({
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+    lastX: 0,
+    lastTime: 0,
+    lockedAxis: "none",
+    containerWidth: 360,
+  })
 
   const isDesktopViewport = viewport.width >= 768
   const isIphoneFrame = isDesktopViewport && desktopMode === "iphone"
   const wallpaperClass = WALLPAPER_CLASS[wallpaper] ?? "ios6-wallpaper-droplets"
   const isHttpLoading = httpActivity.active.length > 0
 
-  // Mark document root attribute cleanly while active
+  const effectiveStatusBarMode =
+    statusBarMode ?? (legacyShowStatusBar === false ? "off" : "auto")
+
+  const showStatusBar = resolveEffectiveShowStatusBar({
+    statusBarMode: effectiveStatusBarMode,
+    legacyShowStatusBar,
+    hasNativeSafeAreaTop,
+    isIphoneFrame,
+  })
+
+  // Mark document root attributes cleanly while active
   useEffect(() => {
     if (typeof document === "undefined") return
     const root = document.documentElement
     root.dataset.orahakoShell = "ios6"
+    if (lightThemeContent) {
+      root.dataset.ios6LightContent = "true"
+    } else {
+      delete root.dataset.ios6LightContent
+    }
     return () => {
       if (root.dataset.orahakoShell === "ios6") {
         delete root.dataset.orahakoShell
       }
+      delete root.dataset.ios6LightContent
     }
-  }, [])
+  }, [lightThemeContent])
 
-  // Track viewport size
+  // Track viewport size & native safe-area-inset-top dynamically
   useEffect(() => {
     if (typeof window === "undefined") return
-    const onResize = () => setViewport(readViewport())
+
+    const measureSafeTop = () => {
+      const probe = safeTopProbeRef.current
+      if (!probe) return
+      const rectHeight = probe.getBoundingClientRect().height
+      const computedHeight = Number.parseFloat(window.getComputedStyle(probe).height) || 0
+      const resolvedTop = Math.max(rectHeight, computedHeight)
+      setHasNativeSafeAreaTop(resolvedTop > 0.5)
+    }
+
+    const onResize = () => {
+      setViewport(readViewport())
+      measureSafeTop()
+    }
+
+    measureSafeTop()
+    const rafId = window.requestAnimationFrame(measureSafeTop)
     window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
+    window.addEventListener("orientationchange", onResize)
+
+    let observer: MutationObserver | undefined
+    if (typeof MutationObserver !== "undefined") {
+      observer = new MutationObserver(measureSafeTop)
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["style", "class"],
+      })
+    }
+
+    return () => {
+      window.cancelAnimationFrame(rafId)
+      window.removeEventListener("resize", onResize)
+      window.removeEventListener("orientationchange", onResize)
+      observer?.disconnect()
+    }
   }, [])
 
   // Keep lock state aligned if lockScreenEnabled is turned off
@@ -417,6 +494,118 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [activeView.kind, spotlightOpen])
 
+  // Real-time finger-tracking SpringBoard swipe with damped rebound
+  const finishSpringboardSwipe = useCallback(
+    (finalClientX: number) => {
+      const state = swipeStateRef.current
+      if (state.pointerId === null) return
+      const wasHorizontal = state.lockedAxis === "horizontal"
+      const deltaX = finalClientX - state.startX
+      const elapsedMs = Math.max(16, performance.now() - state.startTime)
+      const velocityPxPerMs = deltaX / elapsedMs
+
+      state.pointerId = null
+      state.lockedAxis = "none"
+      setIsSwipingHorizontal(false)
+      setSwipeDragOffsetPx(0)
+
+      if (!wasHorizontal) return
+
+      suppressNextAppClickRef.current = true
+      window.setTimeout(() => {
+        suppressNextAppClickRef.current = false
+      }, 90)
+
+      const decision = computeSpringboardSwipe({
+        deltaX,
+        currentPage: safePageIndex,
+        totalPages,
+        containerWidth: state.containerWidth,
+        velocityPxPerMs,
+      })
+
+      if (decision.openSpotlight && showSpotlight) {
+        setSpotlightOpen(true)
+      } else if (decision.nextPage !== safePageIndex) {
+        setCurrentPage(decision.nextPage)
+      }
+    },
+    [safePageIndex, showSpotlight, totalPages]
+  )
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const onWindowPointerMove = (e: PointerEvent) => {
+      const state = swipeStateRef.current
+      if (state.pointerId !== e.pointerId) return
+      const dx = e.clientX - state.startX
+      const dy = e.clientY - state.startY
+
+      if (state.lockedAxis === "none") {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
+        if (Math.abs(dx) > Math.abs(dy)) {
+          state.lockedAxis = "horizontal"
+          setIsSwipingHorizontal(true)
+        } else {
+          state.lockedAxis = "vertical"
+          return
+        }
+      }
+
+      if (state.lockedAxis === "horizontal") {
+        state.lastX = e.clientX
+        state.lastTime = performance.now()
+        const { visualOffsetPx } = computeSpringboardSwipe({
+          deltaX: dx,
+          currentPage: safePageIndex,
+          totalPages,
+          containerWidth: state.containerWidth,
+        })
+        setSwipeDragOffsetPx(visualOffsetPx)
+      }
+    }
+
+    const onWindowPointerEnd = (e: PointerEvent) => {
+      const state = swipeStateRef.current
+      if (state.pointerId !== e.pointerId) return
+      finishSpringboardSwipe(Number.isFinite(e.clientX) ? e.clientX : state.lastX)
+    }
+
+    window.addEventListener("pointermove", onWindowPointerMove)
+    window.addEventListener("pointerup", onWindowPointerEnd)
+    window.addEventListener("pointercancel", onWindowPointerEnd)
+
+    return () => {
+      window.removeEventListener("pointermove", onWindowPointerMove)
+      window.removeEventListener("pointerup", onWindowPointerEnd)
+      window.removeEventListener("pointercancel", onWindowPointerEnd)
+    }
+  }, [finishSpringboardSwipe, safePageIndex, totalPages])
+
+  const handleSpringboardPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return
+    const now = performance.now()
+    swipeStateRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startTime: now,
+      lastX: e.clientX,
+      lastTime: now,
+      lockedAxis: "none",
+      containerWidth: springboardTrackRef.current?.clientWidth || 360,
+    }
+  }
+
+  const handleSpringboardClickCapture = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (suppressNextAppClickRef.current) {
+      e.preventDefault()
+      e.stopPropagation()
+      suppressNextAppClickRef.current = false
+    }
+  }
+
   const bannerNode = renderSlot("shell.banner")
   const activityNode = renderSlot("shell.activity")
   const headerActionsNode = renderSlot("shell.header.actions")
@@ -448,42 +637,29 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
     [locale]
   )
 
-  const handleSpringboardPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    swipeStartXRef.current = e.clientX
-  }
-
-  const handleSpringboardPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (swipeStartXRef.current === null) return
-    const delta = e.clientX - swipeStartXRef.current
-    swipeStartXRef.current = null
-    if (Math.abs(delta) < 48) return
-    if (delta < 0 && safePageIndex < totalPages - 1) {
-      setCurrentPage((p: number) => Math.min(totalPages - 1, p + 1))
-    } else if (delta > 0) {
-      if (safePageIndex > 0) {
-        setCurrentPage((p: number) => Math.max(0, p - 1))
-      } else if (showSpotlight) {
-        setSpotlightOpen(true)
-      }
-    }
-  }
-
   const statusBarElement = showStatusBar ? (
     <Ios6StatusBar
       locked={locked}
       carrierLabel={isHttpLoading ? t("shell.loading") : t("shell.carrier")}
       respectSafeAreaTop={!isIphoneFrame}
     />
-  ) : !isIphoneFrame ? (
-    <div aria-hidden="true" style={{ height: "var(--ios6-safe-top)", flexShrink: 0 }} />
   ) : null
+
+  const extendNavbarIntoSafeTop = !showStatusBar && !isIphoneFrame
 
   const renderDeviceScreenContent = (): ReactNode => {
     if (isFullscreenRoute) {
       return (
         <div className="ios6-pinstripe-bg flex size-full flex-col overflow-hidden">
           {statusBarElement}
-          <header className="ios6-navbar flex shrink-0 items-center justify-between px-3 py-2">
+          <header
+            className="ios6-navbar flex shrink-0 items-center justify-between px-3 py-2"
+            style={{
+              paddingTop: extendNavbarIntoSafeTop ? "calc(8px + var(--ios6-safe-top))" : undefined,
+              paddingLeft: isIphoneFrame ? "12px" : "max(12px, var(--ios6-safe-left))",
+              paddingRight: isIphoneFrame ? "12px" : "max(12px, var(--ios6-safe-right))",
+            }}
+          >
             <span className="ios6-navbar-title text-[16px] font-bold">{t("shell.brand")}</span>
             <button
               type="button"
@@ -494,11 +670,13 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
             </button>
           </header>
           <div
-            className="bg-background text-foreground flex-1 overflow-y-auto p-3"
+            className={`min-h-0 flex-1 overflow-y-auto p-3 ${
+              lightThemeContent ? "ios6-light-viewport" : "bg-background text-foreground"
+            }`}
             style={{
               paddingBottom: isIphoneFrame
                 ? "16px"
-                : "max(16px, var(--ios6-safe-bottom))",
+                : "max(24px, calc(16px + var(--ios6-safe-bottom)))",
             }}
           >
             {children}
@@ -540,12 +718,15 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
                 wallpaper,
                 lockScreenEnabled,
                 rememberUnlockState,
-                showStatusBar,
+                statusBarMode: effectiveStatusBarMode,
+                lightThemeContent,
                 desktopMode,
                 showBadges,
                 showSpotlight,
               }}
               isDesktopViewport={isDesktopViewport}
+              respectSafeArea={!isIphoneFrame}
+              includeSafeTopInNavbar={extendNavbarIntoSafeTop}
               wallpapers={wallpaperOptions}
               onUpdateState={(patch) => {
                 if (patch.wallpaper !== undefined) actions.setWallpaper(patch.wallpaper)
@@ -553,7 +734,10 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
                   actions.setLockScreenEnabled(patch.lockScreenEnabled)
                 if (patch.rememberUnlockState !== undefined)
                   actions.setRememberUnlockState(patch.rememberUnlockState)
-                if (patch.showStatusBar !== undefined) actions.setShowStatusBar(patch.showStatusBar)
+                if (patch.statusBarMode !== undefined)
+                  actions.setStatusBarMode(patch.statusBarMode)
+                if (patch.lightThemeContent !== undefined)
+                  actions.setLightThemeContent(patch.lightThemeContent)
                 if (patch.desktopMode !== undefined) actions.setDesktopMode(patch.desktopMode)
                 if (patch.showBadges !== undefined) actions.setShowBadges(patch.showBadges)
                 if (patch.showSpotlight !== undefined) actions.setShowSpotlight(patch.showSpotlight)
@@ -570,14 +754,19 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
                 enableLockScreenDesc: t("shell.enableLockScreenDesc"),
                 rememberUnlock: t("shell.rememberUnlock"),
                 rememberUnlockDesc: t("shell.rememberUnlockDesc"),
-                showStatusBar: t("shell.showStatusBar"),
-                showStatusBarDesc: t("shell.showStatusBarDesc"),
+                statusBarMode: t("shell.statusBarMode"),
+                statusBarModeDesc: t("shell.statusBarModeDesc"),
+                statusBarAuto: t("shell.statusBarAuto"),
+                statusBarAlways: t("shell.statusBarAlways"),
+                statusBarOff: t("shell.statusBarOff"),
                 lockNow: t("shell.lockNow"),
                 sectionWallpaper: t("shell.sectionWallpaper"),
                 sectionDisplay: t("shell.sectionDisplay"),
                 desktopMode: t("shell.desktopMode"),
                 desktopModeIpad: t("shell.desktopModeIpad"),
                 desktopModeIphone: t("shell.desktopModeIphone"),
+                lightThemeContent: t("shell.lightThemeContent"),
+                lightThemeContentDesc: t("shell.lightThemeContentDesc"),
                 showBadges: t("shell.showBadges"),
                 showSpotlight: t("shell.showSpotlight"),
                 sectionOrahako: t("shell.sectionOrahako"),
@@ -610,6 +799,7 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
           <header
             className="ios6-navbar flex shrink-0 items-center justify-between gap-2 px-2.5 py-1.5"
             style={{
+              paddingTop: extendNavbarIntoSafeTop ? "calc(6px + var(--ios6-safe-top))" : undefined,
               paddingLeft: isIphoneFrame ? "10px" : "max(10px, var(--ios6-safe-left))",
               paddingRight: isIphoneFrame ? "10px" : "max(10px, var(--ios6-safe-right))",
             }}
@@ -641,22 +831,30 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
           </header>
 
           {bannerNode && (
-            <div className="border-b border-[#b7c0c9] bg-[#f8f9fb] px-3 py-1.5 text-[#1f242c]">
+            <div className="ios6-banner-host empty:hidden border-b border-[#b7c0c9] bg-[#f8f9fb] px-3 py-1.5 text-[#1f242c]">
               {bannerNode}
             </div>
           )}
 
-          {/* Plugin Content Viewport (Preserves host theme tokens) */}
+          {/* Plugin Content Viewport (Adapts softly to iOS 6 light palette by default) */}
           <main
-            className="bg-background text-foreground min-h-0 flex-1 overflow-y-auto"
+            className={`min-h-0 flex-1 overflow-y-auto ${
+              lightThemeContent ? "ios6-light-viewport" : "bg-background text-foreground"
+            }`}
             style={{
-              paddingBottom: isIphoneFrame ? "12px" : "var(--ios6-safe-bottom)",
               paddingLeft: isIphoneFrame ? "0px" : "var(--ios6-safe-left)",
               paddingRight: isIphoneFrame ? "0px" : "var(--ios6-safe-right)",
             }}
             data-ios6-page-viewport="true"
           >
-            <div className={gridConfig.isCompact ? "p-3" : "mx-auto w-full max-w-[960px] p-4"}>
+            <div
+              className={gridConfig.isCompact ? "p-3" : "mx-auto w-full max-w-[960px] p-4"}
+              style={{
+                paddingBottom: isIphoneFrame
+                  ? "16px"
+                  : "max(24px, calc(14px + var(--ios6-safe-bottom)))",
+              }}
+            >
               {appContent}
             </div>
           </main>
@@ -665,21 +863,22 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
     }
 
     // SpringBoard Home Screen
-    const currentApps = partitioned.pages[safePageIndex] ?? []
     const iconSize = gridConfig.isCompact ? 56 : 64
+    const reflectionHeight = Math.round(iconSize * 0.25)
 
     return (
       <div
         className={`relative flex size-full flex-col overflow-hidden ${wallpaperClass}`}
-        onPointerDown={handleSpringboardPointerDown}
-        onPointerUp={handleSpringboardPointerUp}
         data-testid="ios6-springboard"
       >
-        {statusBarElement}
+        {statusBarElement ??
+          (!isIphoneFrame ? (
+            <div aria-hidden="true" style={{ height: "var(--ios6-safe-top)", flexShrink: 0 }} />
+          ) : null)}
 
-        {/* Optional Banner Slot */}
+        {/* Optional Banner Slot (Hidden completely unless slot renders actual DOM elements) */}
         {bannerNode && (
-          <div className="mx-3 mt-2 rounded-[10px] border border-white/25 bg-black/55 px-3 py-2 text-xs text-white shadow-md backdrop-blur-xs">
+          <div className="ios6-banner-host empty:hidden mx-3 mt-2 rounded-[10px] border border-white/25 bg-black/55 px-3 py-2 text-xs text-white shadow-md backdrop-blur-xs">
             {bannerNode}
           </div>
         )}
@@ -730,40 +929,62 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
           </div>
         </div>
 
-        {/* SpringBoard App Grid */}
+        {/* SpringBoard Finger-Tracking Multi-Page App Grid */}
         <div
-          className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-3 pt-3 pb-2"
-          style={{
-            paddingLeft: isIphoneFrame ? "12px" : "max(12px, var(--ios6-safe-left))",
-            paddingRight: isIphoneFrame ? "12px" : "max(12px, var(--ios6-safe-right))",
-          }}
+          ref={springboardTrackRef}
+          onPointerDown={handleSpringboardPointerDown}
+          onClickCapture={handleSpringboardClickCapture}
+          className="relative min-h-0 flex-1 touch-pan-y overflow-hidden"
+          data-testid="ios6-springboard-viewport"
         >
           <div
-            className="grid w-full justify-items-center gap-x-2 gap-y-4"
+            className={`flex h-full w-full ${
+              isSwipingHorizontal
+                ? ""
+                : "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            }`}
             style={{
-              maxWidth: gridConfig.isCompact ? "360px" : "760px",
-              gridTemplateColumns: `repeat(${gridConfig.columns}, minmax(0, 1fr))`,
+              transform: `translate3d(calc(-${safePageIndex * 100}% + ${swipeDragOffsetPx}px), 0, 0)`,
             }}
           >
-            {currentApps.map((app: SpringBoardAppEntry) => (
-              <button
-                key={app.key}
-                type="button"
-                onClick={() => handleLaunchApp(app)}
-                data-testid={`ios6-app-${app.key}`}
-                className="group flex w-full max-w-[82px] flex-col items-center gap-1.5 rounded-[10px] py-0.5 text-center transition-transform active:scale-95 focus:outline-none"
+            {partitioned.pages.map((pageApps: readonly SpringBoardAppEntry[], pageIdx: number) => (
+              <div
+                key={pageIdx}
+                className="flex h-full w-full shrink-0 items-start justify-center overflow-y-auto px-3 pt-3 pb-2"
+                style={{
+                  paddingLeft: isIphoneFrame ? "12px" : "max(12px, var(--ios6-safe-left))",
+                  paddingRight: isIphoneFrame ? "12px" : "max(12px, var(--ios6-safe-right))",
+                }}
               >
-                <Ios6AppIcon
-                  kind={app.icon}
-                  size={iconSize}
-                  badgeCount={app.badgeCount}
-                  badgeComponent={app.badgeComponent}
-                  className="transition-transform group-hover:scale-[1.03]"
-                />
-                <span className="ios6-icon-label line-clamp-1 w-full px-0.5 text-[11.5px] leading-tight font-medium">
-                  {app.title}
-                </span>
-              </button>
+                <div
+                  className="grid w-full justify-items-center gap-x-2 gap-y-4"
+                  style={{
+                    maxWidth: gridConfig.isCompact ? "360px" : "760px",
+                    gridTemplateColumns: `repeat(${gridConfig.columns}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {pageApps.map((app: SpringBoardAppEntry) => (
+                    <button
+                      key={app.key}
+                      type="button"
+                      onClick={() => handleLaunchApp(app)}
+                      data-testid={`ios6-app-${app.key}`}
+                      className="group flex w-full max-w-[82px] flex-col items-center gap-1.5 rounded-[10px] py-0.5 text-center transition-transform active:scale-95 focus:outline-none"
+                    >
+                      <Ios6AppIcon
+                        kind={app.icon}
+                        size={iconSize}
+                        badgeCount={app.badgeCount}
+                        badgeComponent={app.badgeComponent}
+                        className="transition-transform group-hover:scale-[1.03]"
+                      />
+                      <span className="ios6-icon-label line-clamp-1 w-full px-0.5 text-[11.5px] leading-tight font-medium">
+                        {app.title}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -796,7 +1017,7 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
           })}
         </div>
 
-        {/* Classic 3D Frosted Glass Dock */}
+        {/* Classic 3D Frosted Glass Dock with Mirror Reflections */}
         <div
           className="ios6-dock-shelf relative z-10 shrink-0 px-3 pt-1"
           style={{
@@ -822,16 +1043,32 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
                 type="button"
                 onClick={() => handleLaunchApp(app)}
                 data-testid={`ios6-dock-${app.key}`}
-                className="group flex w-full max-w-[78px] flex-col items-center gap-1 text-center transition-transform active:scale-95 focus:outline-none"
+                className="group flex w-full max-w-[78px] flex-col items-center text-center transition-transform active:scale-95 focus:outline-none"
               >
-                <Ios6AppIcon
-                  kind={app.icon}
-                  size={iconSize}
-                  badgeCount={app.badgeCount}
-                  badgeComponent={app.badgeComponent}
-                  className="transition-transform group-hover:scale-[1.04]"
-                />
-                <span className="ios6-icon-label line-clamp-1 w-full text-[11px] leading-tight font-medium">
+                <div className="flex flex-col items-center">
+                  <Ios6AppIcon
+                    kind={app.icon}
+                    size={iconSize}
+                    badgeCount={app.badgeCount}
+                    badgeComponent={app.badgeComponent}
+                    className="transition-transform group-hover:scale-[1.04]"
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="ios6-dock-reflection relative mt-[1px] overflow-hidden"
+                    style={{ width: iconSize, height: reflectionHeight }}
+                  >
+                    <div
+                      style={{
+                        transform: "scaleY(-1)",
+                        transformOrigin: "center center",
+                      }}
+                    >
+                      <Ios6AppIcon kind={app.icon} size={iconSize} glossy={false} />
+                    </div>
+                  </div>
+                </div>
+                <span className="ios6-icon-label relative z-10 -mt-[4px] line-clamp-1 w-full text-[11px] leading-tight font-medium">
                   {app.title}
                 </span>
               </button>
@@ -872,6 +1109,19 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
       }`}
     >
       <style data-ios6-shell-styles="">{IOS6_GLOBAL_CSS}</style>
+      <div
+        ref={safeTopProbeRef}
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: 0,
+          height: "var(--ios6-safe-top)",
+          pointerEvents: "none",
+          visibility: "hidden",
+        }}
+      />
 
       {isIphoneFrame ? (
         <div className="flex max-h-full flex-col items-center gap-3">
@@ -943,7 +1193,7 @@ export const Ios6Shell: SlotComponent<Ios6ShellProps> = (props) => {
     <BackLayerProvider registerBackHandler={registerBackHandler}>
       {renderSlotChain("shell.gate", shellStage)}
       {overlayNode}
-      <Toaster theme="light" position="bottom-right" />
+      <Toaster theme={lightThemeContent ? "light" : "system"} position="bottom-right" />
     </BackLayerProvider>
   )
 }

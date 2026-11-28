@@ -147,6 +147,7 @@ export const ios6ShellPlugin = definePlugin({
           icon: resolveIos6IconKind({
             pluginId: page.pluginId,
             id: page.id,
+            title,
             icon: typeof item.icon === "string" ? item.icon : undefined,
             group,
           }),
@@ -209,6 +210,7 @@ export const ios6ShellPlugin = definePlugin({
           icon: resolveIos6IconKind({
             pluginId: cat.pluginId,
             id: cat.id,
+            title,
             icon: typeof cat.icon === "string" ? cat.icon : undefined,
           }),
         })
