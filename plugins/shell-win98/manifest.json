@@ -1,7 +1,7 @@
 {
   "id": "orahako.shell.win98",
   "name": "Windows 98 桌面",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "kind": "shell",
   "inject": ["ui", "slots", "router", "navigation", "i18n", "storage", "assets"],

@@ -167,14 +167,14 @@ importers:
   .:
     dependencies:
       '@orahako/academic-sdk':
-        specifier: ^0.1.0
-        version: 0.1.0(@cordisjs/core@3.18.1)(react@19.3.1)
+        specifier: ^0.1.1
+        version: 0.1.1(@cordisjs/core@3.18.1)(react@19.3.1)
       '@orahako/sdk':
-        specifier: ^0.1.0
-        version: 0.1.0(@cordisjs/core@3.18.1)(react@19.3.1)
+        specifier: ^0.1.1
+        version: 0.1.1(@cordisjs/core@3.18.1)(react@19.3.1)
       '@orahako/ui-primitives':
-        specifier: ^0.1.0
-        version: 0.1.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sonner@2.0.8(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))
+        specifier: ^0.1.1
+        version: 0.1.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sonner@2.0.8(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))
       html5-qrcode:
         specifier: ^2.3.8
         version: 2.3.8
@@ -195,8 +195,8 @@ importers:
         version: 5.1.0(@types/react@19.3.0)(react@19.3.1)
     devDependencies:
       '@orahako/cli':
-        specifier: ^0.1.0
-        version: 0.1.0(@cordisjs/core@3.18.1)(react@19.3.1)
+        specifier: ^0.1.1
+        version: 0.1.1(@cordisjs/core@3.18.1)(react@19.3.1)
       '@types/leaflet':
         specifier: ^1.9.22
         version: 1.9.22
@@ -422,25 +422,25 @@ packages:
       '@emnapi/core': ^1.7.1 || 2.0.0-beta.2
       '@emnapi/runtime': ^1.7.1 || 2.0.0-beta.2
 
-  '@orahako/academic-sdk@0.1.0':
-    resolution: {integrity: sha512-h7QiBB+Og7V7nB6FFJgUKImkT5+wYPV2z10TZx51z0Q8snLnpVaZsQzoGCB/KI+HLfnjkTLcxieIrIlHF88roQ==}
+  '@orahako/academic-sdk@0.1.1':
+    resolution: {integrity: sha512-KdAoajpyM/L0r4MH8oEVZoka5ojpC0MqNcEYYW51dLn48EFRa9dM3uWKIqqBHtXOoFMFU3I9nFsSDHu9Tp919w==}
     peerDependencies:
       '@cordisjs/core': ^3.18.1
       react: ^19.2.0
 
-  '@orahako/cli@0.1.0':
-    resolution: {integrity: sha512-2hJ4hbpTaAt41NJ2kgyHi1X7GmRBdS8qYRJ9kPKINphf2Y92UOKenFKs3p69X2tl6S1ATMFrFHCHWL16yy0PEA==}
+  '@orahako/cli@0.1.1':
+    resolution: {integrity: sha512-BM8O6KnHG+PbTimUMMX1ZWwa0k9Y98e93SZKs0lfHDwI0aS60+VqbsrEl2VvFxc5N9oeyLsAi9B3rcovLL1ssg==}
     engines: {node: '>=20'}
     hasBin: true
 
-  '@orahako/sdk@0.1.0':
-    resolution: {integrity: sha512-lPcB+bcWu2Ga24xEYMJF3TsWvt5BuQmph+A7lZA8dAC8an6go8PYcDg1tZfT5vSREmZ/w1K6qvpkFD310UXqlA==}
+  '@orahako/sdk@0.1.1':
+    resolution: {integrity: sha512-DiVe/fpUKojrDA8jE5YFbx3HLv1GqEhQluKo7x/ckSfMa5VasEyaFtwcEuqCeHx1u+EqVCNnaM4Y6fW7rYcD8g==}
     peerDependencies:
       '@cordisjs/core': ^3.18.1
       react: ^19.2.0
 
-  '@orahako/ui-primitives@0.1.0':
-    resolution: {integrity: sha512-9CvnpiK+5pOOTPhX0kXZhDSP7TgVC+zC+FVPZdI206yNCW/1X9e3Pm1Zh2rQ0yLW1zTQjGIb4ZWdwhDkeKTmnw==}
+  '@orahako/ui-primitives@0.1.1':
+    resolution: {integrity: sha512-U2vkAnCKn7J5hAc/Yq8DhEhZRResgi1XBWBro1AF1u9RfJ073/Fd/xdSDuPqv14JQS3K1WtwmIcN9Rrl9UCC6g==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -2003,15 +2003,15 @@ snapshots:
       '@tybys/wasm-util': 0.10.4
     optional: true
 
-  '@orahako/academic-sdk@0.1.0(@cordisjs/core@3.18.1)(react@19.3.1)':
+  '@orahako/academic-sdk@0.1.1(@cordisjs/core@3.18.1)(react@19.3.1)':
     dependencies:
       '@cordisjs/core': 3.18.1
-      '@orahako/sdk': 0.1.0(@cordisjs/core@3.18.1)(react@19.3.1)
+      '@orahako/sdk': 0.1.1(@cordisjs/core@3.18.1)(react@19.3.1)
       react: 19.3.1
 
-  '@orahako/cli@0.1.0(@cordisjs/core@3.18.1)(react@19.3.1)':
+  '@orahako/cli@0.1.1(@cordisjs/core@3.18.1)(react@19.3.1)':
     dependencies:
-      '@orahako/sdk': 0.1.0(@cordisjs/core@3.18.1)(react@19.3.1)
+      '@orahako/sdk': 0.1.1(@cordisjs/core@3.18.1)(react@19.3.1)
       '@tailwindcss/postcss': 4.3.5
       esbuild: 0.28.2
       fflate: 0.8.3
@@ -2022,14 +2022,14 @@ snapshots:
       - '@cordisjs/core'
       - react
 
-  '@orahako/sdk@0.1.0(@cordisjs/core@3.18.1)(react@19.3.1)':
+  '@orahako/sdk@0.1.1(@cordisjs/core@3.18.1)(react@19.3.1)':
     dependencies:
       '@capacitor/core': 8.6.2
       '@cordisjs/core': 3.18.1
       react: 19.3.1
       semver: 7.8.6
 
-  '@orahako/ui-primitives@0.1.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sonner@2.0.8(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))':
+  '@orahako/ui-primitives@0.1.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sonner@2.0.8(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))':
     dependencies:
       class-variance-authority: 0.7.1
       clsx: 2.1.1

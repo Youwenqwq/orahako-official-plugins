@@ -16,9 +16,9 @@
     "validate:tag": "node scripts/validate-release-tag.mjs"
   },
   "dependencies": {
-    "@orahako/academic-sdk": "^0.1.0",
-    "@orahako/sdk": "^0.1.0",
-    "@orahako/ui-primitives": "^0.1.0",
+    "@orahako/academic-sdk": "^0.1.1",
+    "@orahako/sdk": "^0.1.1",
+    "@orahako/ui-primitives": "^0.1.1",
     "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.17.0",
@@ -27,7 +27,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
-    "@orahako/cli": "^0.1.0",
+    "@orahako/cli": "^0.1.1",
     "@types/leaflet": "^1.9.22",
     "postcss": "^8.5.15",
     "vitest": "^4.1.11"

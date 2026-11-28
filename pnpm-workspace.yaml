@@ -3,7 +3,7 @@ packages:
 allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
-  - "@orahako/academic-sdk@0.1.0"
-  - "@orahako/cli@0.1.0"
-  - "@orahako/sdk@0.1.0"
-  - "@orahako/ui-primitives@0.1.0"
+  - "@orahako/academic-sdk@0.1.0 || 0.1.1"
+  - "@orahako/cli@0.1.0 || 0.1.1"
+  - "@orahako/sdk@0.1.0 || 0.1.1"
+  - "@orahako/ui-primitives@0.1.0 || 0.1.1"
