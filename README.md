@@ -11,16 +11,9 @@ the CORS contract provided by GitHub Raw.
 
 ## Plugins
 
-| Directory | Plugin ID | Version | Kind |
-| --- | --- | --- | --- |
-| `plugins/daimao` | `orahako.daimao` | 1.0.0 | feature |
-| `plugins/shell-win98` | `orahako.shell.win98` | 1.0.0 | shell |
-| `plugins/skbird` | `orahako.skbird` | 1.0.1 | feature |
-| `plugins/theme-arknights` | `community.theme.arknights` | 1.0.1 | theme |
-| `plugins/theme-yuna` | `community.theme.yuna` | 1.0.0 | theme |
-
-ZMU Provider and Perlica development are paused. Their sources are retained
-under `archived/`, outside plugin discovery and release builds.
+Active plugins live under [`plugins/`](plugins/), each with its own
+`manifest.json`. Paused sources are retained under `archived/`, outside plugin
+discovery and release builds.
 
 ## Layout
 
