@@ -1,0 +1,14 @@
+{
+  "id": "orahako.shell.ios6",
+  "name": "iOS 6 桌面",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "kind": "shell",
+  "inject": ["ui", "slots", "router", "navigation", "i18n", "storage"],
+  "entry": "dist/index.js",
+  "categories": ["appearance"],
+  "providerIndependent": true,
+  "description": "经典 iOS 6 拟物化桌面 Shell：提供 Slide to Unlock 锁屏、水滴与亚麻壁纸、手绘拟物 SVG 图标、3D 玻璃斜坡 Dock、Spotlight 搜索、经典 UINavigationBar 与条纹分组设置，完整适配移动端安全区与桌面端自适应/机身框布局。",
+  "author": "Orahako Community",
+  "homepage": "https://github.com/Youwenqwq/orahako-official-plugins/tree/main/plugins/shell-ios6"
+}

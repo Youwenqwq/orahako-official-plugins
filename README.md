@@ -14,6 +14,7 @@ the CORS contract provided by GitHub Raw.
 | Directory | Plugin ID | Version | Kind |
 | --- | --- | --- | --- |
 | `plugins/daimao` | `orahako.daimao` | 1.0.0 | feature |
+| `plugins/shell-ios6` | `orahako.shell.ios6` | 1.0.0 | shell |
 | `plugins/shell-win98` | `orahako.shell.win98` | 1.0.0 | shell |
 | `plugins/skbird` | `orahako.skbird` | 1.0.1 | feature |
 | `plugins/theme-arknights` | `community.theme.arknights` | 1.0.1 | theme |
