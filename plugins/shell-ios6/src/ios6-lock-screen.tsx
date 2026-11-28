@@ -4,7 +4,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type PointerEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react"
 import { computeSlideUnlockProgress } from "./springboard"
@@ -48,12 +48,14 @@ export function Ios6LockScreen({
   const dragStateRef = useRef<{
     pointerId: number | null
     startX: number
+    lastX: number
     trackWidth: number
     knobWidth: number
     moved: boolean
   }>({
     pointerId: null,
     startX: 0,
+    lastX: 0,
     trackWidth: 260,
     knobWidth: 66,
     moved: false,
@@ -67,14 +69,81 @@ export function Ios6LockScreen({
   const triggerUnlock = useCallback(() => {
     if (unlocking) return
     setUnlocking(true)
-    const trackWidth = trackRef.current?.clientWidth ?? 260
-    const knobWidth = knobRef.current?.clientWidth ?? 66
+    const trackWidth = trackRef.current?.clientWidth || 260
+    const knobWidth = knobRef.current?.clientWidth || 66
     const { offsetPx } = computeSlideUnlockProgress(trackWidth, trackWidth, knobWidth)
     setDragOffset(offsetPx)
     window.setTimeout(() => {
       onUnlock()
     }, 180)
   }, [onUnlock, unlocking])
+
+  const updateDragByClientX = useCallback((clientX: number) => {
+    const state = dragStateRef.current
+    if (state.pointerId === null) return
+    state.lastX = clientX
+    const delta = clientX - state.startX
+    if (Math.abs(delta) > 4) {
+      state.moved = true
+    }
+    const { offsetPx } = computeSlideUnlockProgress(delta, state.trackWidth, state.knobWidth)
+    setDragOffset(offsetPx)
+  }, [])
+
+  const finishDragByClientX = useCallback(
+    (clientX: number) => {
+      const state = dragStateRef.current
+      if (state.pointerId === null) return
+      state.pointerId = null
+      setDragging(false)
+      const effectiveX = Number.isFinite(clientX) && clientX !== 0 ? clientX : state.lastX
+      const delta = effectiveX - state.startX
+      const { unlocked } = computeSlideUnlockProgress(delta, state.trackWidth, state.knobWidth)
+      // Clicking the knob without dragging also unlocks cleanly for mouse/accessibility convenience
+      if (unlocked || !state.moved) {
+        triggerUnlock()
+      } else {
+        setDragOffset(0)
+      }
+    },
+    [triggerUnlock]
+  )
+
+  useEffect(() => {
+    if (!dragging) return
+
+    const onWindowPointerMove = (e: PointerEvent) => {
+      if (dragStateRef.current.pointerId !== e.pointerId) return
+      updateDragByClientX(e.clientX)
+    }
+
+    const onWindowPointerEnd = (e: PointerEvent) => {
+      if (dragStateRef.current.pointerId !== e.pointerId) return
+      finishDragByClientX(e.clientX)
+    }
+
+    // Prevent WebView/mobile browsers from hijacking horizontal touch gestures during drag
+    const onWindowTouchMove = (e: TouchEvent) => {
+      if (dragStateRef.current.pointerId === null) return
+      if (e.cancelable) e.preventDefault()
+      const touch = e.touches[0]
+      if (touch) {
+        updateDragByClientX(touch.clientX)
+      }
+    }
+
+    window.addEventListener("pointermove", onWindowPointerMove)
+    window.addEventListener("pointerup", onWindowPointerEnd)
+    window.addEventListener("pointercancel", onWindowPointerEnd)
+    window.addEventListener("touchmove", onWindowTouchMove, { passive: false })
+
+    return () => {
+      window.removeEventListener("pointermove", onWindowPointerMove)
+      window.removeEventListener("pointerup", onWindowPointerEnd)
+      window.removeEventListener("pointercancel", onWindowPointerEnd)
+      window.removeEventListener("touchmove", onWindowTouchMove)
+    }
+  }, [dragging, finishDragByClientX, updateDragByClientX])
 
   const handleClick = useCallback(() => {
     if (dragStateRef.current.moved) {
@@ -85,51 +154,50 @@ export function Ios6LockScreen({
   }, [triggerUnlock])
 
   const handlePointerDown = useCallback(
-    (e: PointerEvent<HTMLButtonElement>) => {
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
       if (unlocking) return
       e.preventDefault()
-      const trackWidth = trackRef.current?.clientWidth ?? 260
-      const knobWidth = knobRef.current?.clientWidth ?? 66
+      const trackWidth = trackRef.current?.clientWidth || 260
+      const knobWidth = knobRef.current?.clientWidth || 66
       dragStateRef.current = {
         pointerId: e.pointerId,
         startX: e.clientX,
+        lastX: e.clientX,
         trackWidth,
         knobWidth,
         moved: false,
       }
-      e.currentTarget.setPointerCapture(e.pointerId)
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId)
+      } catch {
+        // Fallback to window pointer listeners
+      }
       setDragging(true)
     },
     [unlocking]
   )
 
-  const handlePointerMove = useCallback((e: PointerEvent<HTMLButtonElement>) => {
-    const state = dragStateRef.current
-    if (state.pointerId !== e.pointerId) return
-    const delta = e.clientX - state.startX
-    if (Math.abs(delta) > 4) {
-      state.moved = true
-    }
-    const { offsetPx } = computeSlideUnlockProgress(delta, state.trackWidth, state.knobWidth)
-    setDragOffset(offsetPx)
-  }, [])
-
-  const finishDrag = useCallback(
-    (e: PointerEvent<HTMLButtonElement>) => {
-      const state = dragStateRef.current
-      if (state.pointerId !== e.pointerId) return
-      state.pointerId = null
-      setDragging(false)
-      const delta = e.clientX - state.startX
-      const { unlocked } = computeSlideUnlockProgress(delta, state.trackWidth, state.knobWidth)
-      // Clicking the knob without dragging also unlocks cleanly for mouse/accessibility convenience
-      if (unlocked || !state.moved) {
-        triggerUnlock()
-      } else {
-        setDragOffset(0)
-      }
+  const handlePointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (dragStateRef.current.pointerId !== e.pointerId) return
+      updateDragByClientX(e.clientX)
     },
-    [triggerUnlock]
+    [updateDragByClientX]
+  )
+
+  const handlePointerFinish = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (dragStateRef.current.pointerId !== e.pointerId) return
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId)
+        }
+      } catch {
+        // Ignore
+      }
+      finishDragByClientX(e.clientX)
+    },
+    [finishDragByClientX]
   )
 
   const handleKeyDown = useCallback(
@@ -198,7 +266,7 @@ export function Ios6LockScreen({
       >
         <div
           ref={trackRef}
-          className="ios6-slide-track relative mx-auto flex h-[50px] w-full max-w-[300px] items-center rounded-[12px] p-[4px]"
+          className="ios6-slide-track relative mx-auto flex h-[50px] w-full max-w-[300px] touch-none select-none items-center rounded-[12px] p-[4px]"
         >
           {/* Shimmering Slide to Unlock Prompt */}
           <div
@@ -216,13 +284,14 @@ export function Ios6LockScreen({
             type="button"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
-            onPointerUp={finishDrag}
-            onPointerCancel={finishDrag}
+            onPointerUp={handlePointerFinish}
+            onPointerCancel={handlePointerFinish}
             onClick={handleClick}
             onKeyDown={handleKeyDown}
+            onDragStart={(e) => e.preventDefault()}
             aria-label={slideLabel}
             data-testid="ios6-slide-knob"
-            className={`ios6-slide-knob relative z-10 flex h-[40px] w-[66px] cursor-grab items-center justify-center rounded-[9px] active:cursor-grabbing ${
+            className={`ios6-slide-knob relative z-10 flex h-[40px] w-[66px] touch-none select-none cursor-grab items-center justify-center rounded-[9px] active:cursor-grabbing ${
               dragging ? "" : "transition-transform duration-200 ease-out"
             }`}
             style={{ transform: `translateX(${dragOffset}px)` }}

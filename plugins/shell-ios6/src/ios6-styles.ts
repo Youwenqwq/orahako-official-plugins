@@ -125,6 +125,9 @@ export const IOS6_GLOBAL_CSS = `
 }
 
 .ios6-slide-track {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
   background: linear-gradient(180deg, #0b0c0e 0%, #1d2024 45%, #2b2f35 100%);
   border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow:
@@ -133,6 +136,10 @@ export const IOS6_GLOBAL_CSS = `
 }
 
 .ios6-slide-knob {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
   background: linear-gradient(180deg, #ffffff 0%, #e1e4e8 48%, #c7ccd2 52%, #e9ecef 100%);
   border: 1px solid #484d54;
   box-shadow:
